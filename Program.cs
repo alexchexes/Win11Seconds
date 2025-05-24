@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Diagnostics;
 using Microsoft.Win32;
 
 static class NativeMethods
@@ -9,13 +8,87 @@ static class NativeMethods
         IntPtr hwnd, int attr, ref int attrValue, int attrSize);
 
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    public const int DWMWA_BORDER_COLOR = 34;
+    public const int DWMWA_CAPTION_COLOR = 35;
+
     public enum DwmWindowCornerPreference
     {
-        DWMWCP_DEFAULT    = 0,
+        DWMWCP_DEFAULT = 0,
         DWMWCP_DONOTROUND = 1,
-        DWMWCP_ROUND      = 2,  // full Win11 radius
-        DWMWCP_ROUNDSMALL = 3   // slightly smaller
+        DWMWCP_ROUND = 2,
+        DWMWCP_ROUNDSMALL = 3
     }
+}
+
+class BorderlessResizableForm : Form
+{
+    const int WM_NCHITTEST = 0x84;
+    const int HTCLIENT = 1;
+    const int HTLEFT = 10;
+    const int HTRIGHT = 11;
+    const int HTTOP = 12;
+    const int HTTOPLEFT = 13;
+    const int HTTOPRIGHT = 14;
+    const int HTBOTTOM = 15;
+    const int HTBOTTOMLEFT = 16;
+    const int HTBOTTOMRIGHT = 17;
+    const int WM_SIZING = 0x214;
+    const int _border = 6;
+    const int GWL_STYLE = -16;
+    const int WS_THICKFRAME = 0x00040000;
+
+    public BorderlessResizableForm()
+    {
+        FormBorderStyle = FormBorderStyle.None;
+    }
+
+    protected override CreateParams CreateParams
+    {
+        get
+        {
+            var cp = base.CreateParams;
+            cp.Style |= WS_THICKFRAME;
+            return cp;
+        }
+    }
+
+    protected override void WndProc(ref Message m)
+    {
+
+        const int WM_NCHITTEST = 0x84;
+        if (m.Msg == WM_NCHITTEST)
+        {
+            var p = PointToClient(Cursor.Position);
+            bool left = p.X < _border;
+            bool right = p.X >= ClientSize.Width - _border;
+            bool bottom = p.Y >= ClientSize.Height - _border;
+
+            if (left && bottom) m.Result = (IntPtr)HTBOTTOMLEFT;
+            else if (right && bottom) m.Result = (IntPtr)HTBOTTOMRIGHT;
+            else if (left) m.Result = (IntPtr)HTLEFT;
+            else if (right) m.Result = (IntPtr)HTRIGHT;
+            else if (bottom) m.Result = (IntPtr)HTBOTTOM;
+            else m.Result = (IntPtr)HTCLIENT;  // everything else, including top, is just client
+            return;
+        }
+
+        if (m.Msg == WM_SIZING)
+        {
+            // maintain aspect ratio
+            var aspect = 200f / 80f;
+            var rect = (RECT)Marshal.PtrToStructure(m.LParam, typeof(RECT));
+            int width = rect.right - rect.left;
+            int height = (int)(width / aspect);
+            rect.bottom = rect.top + height;
+            Marshal.StructureToPtr(rect, m.LParam, true);
+            m.Result = IntPtr.Zero;
+            return;
+        }
+        base.WndProc(ref m);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    struct RECT { public int left, top, right, bottom; }
 }
 
 static class Program
@@ -32,15 +105,17 @@ static class Program
 
 class TrayContext : ApplicationContext
 {
-    // P/Invoke for dragging
+    // for dragging
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
-    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(
+        IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
     const int WM_NCLBUTTONDOWN = 0xA1, HTCAPTION = 0x2;
 
     private readonly NotifyIcon tray;
     private readonly Form clockForm;
     private readonly Label timeLabel;
-    private readonly Label closeLabel;     // replaced Button with Label
+    private readonly Label closeLabel;
     private readonly System.Windows.Forms.Timer timer;
     private readonly System.Windows.Forms.Timer closeHideTimer;
     private readonly bool isLightTheme;
@@ -48,12 +123,10 @@ class TrayContext : ApplicationContext
 
     public TrayContext()
     {
-        // detect theme
         isLightTheme = ((int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "AppsUseLightTheme", 1)) != 0;
 
-        // tray icon
         tray = new NotifyIcon
         {
             Icon = SystemIcons.Application,
@@ -64,44 +137,51 @@ class TrayContext : ApplicationContext
         tray.MouseUp += (s, e) => { if (e.Button == MouseButtons.Left) ToggleClock(); };
         tray.ContextMenuStrip.Items.Add("Exit", null, (s, e) => { tray.Visible = false; Application.ExitThread(); });
 
-        // popup form
-        clockForm = new Form
+        clockForm = new BorderlessResizableForm
         {
-            FormBorderStyle = FormBorderStyle.None,
             ShowInTaskbar = false,
             StartPosition = FormStartPosition.Manual,
             TopMost = true,
             BackColor = isLightTheme ? Color.White : Color.FromArgb(32, 32, 32),
             ClientSize = new Size(200, 80)
         };
-
         clockForm.HandleCreated += (s, e) =>
         {
+            // corner rounding
             int pref = (int)NativeMethods.DwmWindowCornerPreference.DWMWCP_ROUND;
-            int hr = NativeMethods.DwmSetWindowAttribute(
+            NativeMethods.DwmSetWindowAttribute(
                 clockForm.Handle,
                 NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
                 ref pref,
                 sizeof(int)
             );
-            if (hr != 0)
-            {
-                // non-zero means failure: you can log or ignore
-                Debug.WriteLine($"DwmSetWindowAttribute failed: 0x{hr:X8}");
-            }
-        };
+            // border color fix: make the non-client caption strip at the top to match the background
+            int bgColor = isLightTheme
+                ? Color.White.ToArgb() & 0x00FFFFFF
+                : Color.FromArgb(32, 32, 32).ToArgb() & 0x00FFFFFF;
 
-        clockForm.FormClosing += (s, e) =>
+            NativeMethods.DwmSetWindowAttribute(
+                clockForm.Handle,
+                NativeMethods.DWMWA_CAPTION_COLOR,
+                ref bgColor,
+                sizeof(int)
+            );
+        };
+        clockForm.Resize += (s, e) =>
         {
-            if (e.CloseReason == CloseReason.UserClosing)
-            {
-                e.Cancel = true;
-                HideClock();
-            }
-        };
-        clockForm.Move += (_, __) => lastLocation = clockForm.Location;
+            // dynamic font sizing
+            // tighter padding so the text fills more of the form
+            int pad = 1;
+            int h = clockForm.ClientSize.Height - pad * 2;
+            float fontSize = h * 0.3f;
+            timeLabel.Font = new Font("Segoe UI", fontSize, FontStyle.Regular);
 
-        // clock label
+            // reposition close label
+            closeLabel.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 4);
+        };
+        clockForm.FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; HideClock(); } };
+        clockForm.Move += (s, e) => lastLocation = clockForm.Location;
+
         timeLabel = new Label
         {
             Dock = DockStyle.Fill,
@@ -112,13 +192,12 @@ class TrayContext : ApplicationContext
         };
         clockForm.Controls.Add(timeLabel);
 
-        // close label (pure ✕, no background or border)
         closeLabel = new Label
         {
             Text = "✕",
             Font = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size, FontStyle.Regular),
             TextAlign = ContentAlignment.MiddleCenter,
-            BackColor = Color.Transparent,
+            BackColor = clockForm.BackColor,    // ← match the form’s background, not Transparent  
             ForeColor = isLightTheme ? Color.Black : Color.White,
             Size = new Size(24, 24),
             Location = new Point(clockForm.ClientSize.Width - 28, 4),
@@ -126,26 +205,25 @@ class TrayContext : ApplicationContext
         };
         closeLabel.Click += (s, e) => HideClock();
         clockForm.Controls.Add(closeLabel);
-        closeLabel.BringToFront();
+        closeLabel.BringToFront();          // ← ensure it’s on top of the timeLabel 
 
-        // draggable everywhere except close label
+        closeLabel.Cursor = Cursors.Hand;
+
         clockForm.MouseDown += DragWindow;
         timeLabel.MouseDown += DragWindow;
 
-        // hover region with margin
         clockForm.MouseMove += OnPopupMouseMove;
-        timeLabel.MouseMove += OnPopupMouseMove;
+        timeLabel.MouseMove  += OnPopupMouseMove;
+        closeLabel.MouseMove  += OnPopupMouseMove;
+
         clockForm.MouseLeave += (s, e) => closeLabel.Visible = false;
 
-        // timer
         timer = new System.Windows.Forms.Timer { Interval = 1000 };
-        timer.Tick += (_, __) => timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
-        
-        // in your constructor, after you set up your existing timer:
+        timer.Tick += (s, e) => timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
+
         closeHideTimer = new System.Windows.Forms.Timer { Interval = 100 };
         closeHideTimer.Tick += (s, e) =>
         {
-            // if the close-label is visible but our cursor is no longer over the form...
             if (closeLabel.Visible && !clockForm.Bounds.Contains(Cursor.Position))
                 closeLabel.Visible = false;
         };
@@ -153,14 +231,13 @@ class TrayContext : ApplicationContext
 
     private void ToggleClock()
     {
-        if (clockForm.Visible) HideClock();
-        else                     ShowClock();
+        if (clockForm.Visible) HideClock(); else ShowClock();
     }
 
     private void ShowClock()
     {
         timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
-        closeLabel.Visible = false;
+        closeLabel.BringToFront();
 
         if (lastLocation.HasValue &&
             Screen.AllScreens.Any(sc => sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))))
@@ -169,16 +246,18 @@ class TrayContext : ApplicationContext
         }
         else
         {
-            const int offset = 8;
+            const int offset = 14;
             var cur = Cursor.Position;
             var scr = Screen.FromPoint(cur);
             int x = cur.X - clockForm.Width / 2;
             int y = cur.Y - clockForm.Height - offset;
             x = Math.Max(scr.WorkingArea.Left, Math.Min(x, scr.WorkingArea.Right - clockForm.Width));
-            if (y < scr.WorkingArea.Top) y = cur.Y + offset;
+            if (y < scr.WorkingArea.Top)
+            {
+                y = cur.Y + offset;
+            }
             clockForm.Location = new Point(x, y);
         }
-
         clockForm.Show();
         timer.Start();
         closeHideTimer.Start();
@@ -189,6 +268,7 @@ class TrayContext : ApplicationContext
         timer.Stop();
         clockForm.Hide();
         closeHideTimer.Stop();
+        closeLabel.Visible = false;
     }
 
     private void DragWindow(object? s, MouseEventArgs e)
@@ -198,11 +278,14 @@ class TrayContext : ApplicationContext
         SendMessage(clockForm.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
     }
 
-    private void OnPopupMouseMove(object? s, MouseEventArgs e)
+    private void OnPopupMouseMove(object? sender, MouseEventArgs e)
     {
+        var p = clockForm.PointToClient(Cursor.Position);
         var r = clockForm.ClientRectangle;
-        const int baseSize = 30, margin = 7;
-        int region = baseSize + margin;
-        closeLabel.Visible = (e.X >= r.Width - region && e.Y <= region);
+        const int hoverSize = 30, margin = 7;
+        int region = hoverSize + margin;
+
+        // show only if the mouse (relative to the form) is in that top-right band:
+        closeLabel.Visible = (p.X >= r.Width - region && p.Y <= region);
     }
 }
