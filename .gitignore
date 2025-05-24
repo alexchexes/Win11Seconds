@@ -1,0 +1,51 @@
+# Build output directories
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Backup & temp files
+*.bak
+*.tmp
+*~
+
+# NuGet packages and metadata
+*.nupkg
+*.snupkg
+*.nuspec
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Mono
+mono_crash.*
+
+# Publish output (you’ll manually upload .exe to GitHub Releases)
+**/publish/
+
+# Visual Studio cache
+.vs/
+
+# DotNet CLI
+*.dbmdl
+
+# Logs
+*.log
+Logs/
+logs/
