@@ -76,7 +76,7 @@ class BorderlessResizableForm : Form
         {
             // maintain aspect ratio
             var aspect = 200f / 80f;
-            var rect = (RECT)Marshal.PtrToStructure(m.LParam, typeof(RECT));
+            var rect = Marshal.PtrToStructure<RECT>(m.LParam);
             int width = rect.right - rect.left;
             int height = (int)(width / aspect);
             rect.bottom = rect.top + height;
@@ -174,10 +174,10 @@ class TrayContext : ApplicationContext
             int pad = 1;
             int h = clockForm.ClientSize.Height - pad * 2;
             float fontSize = h * 0.3f;
-            timeLabel.Font = new Font("Segoe UI", fontSize, FontStyle.Regular);
+            timeLabel!.Font = new Font("Segoe UI", fontSize, FontStyle.Regular);
 
             // reposition close label
-            closeLabel.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 4);
+            closeLabel!.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 4);
         };
         clockForm.FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; HideClock(); } };
         clockForm.Move += (s, e) => lastLocation = clockForm.Location;
