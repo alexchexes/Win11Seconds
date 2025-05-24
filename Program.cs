@@ -3,6 +3,7 @@ using Microsoft.Win32;
 using System.Drawing.Text;
 using System.Drawing.Drawing2D;
 using System.Reflection;
+using System.Diagnostics;  // for Process.Start
 
 static class NativeMethods
 {
@@ -165,7 +166,7 @@ class TrayContext : ApplicationContext
         {
             Text = "Click to show clock",
             Visible = true,
-            ContextMenuStrip = new ContextMenuStrip()
+            // ContextMenuStrip = new ContextMenuStrip()
         };
         // load embedded icon
         var asm = Assembly.GetExecutingAssembly();
@@ -176,7 +177,7 @@ class TrayContext : ApplicationContext
 
 
         tray.MouseUp += (s, e) => { if (e.Button == MouseButtons.Left) ToggleClock(); };
-        tray.ContextMenuStrip.Items.Add("Exit", null, (s, e) => { tray.Visible = false; Application.ExitThread(); });
+        // tray.ContextMenuStrip.Items.Add("Exit", null, (s, e) => { tray.Visible = false; Application.ExitThread(); });
 
         // popup
         clockForm = new BorderlessResizableForm
@@ -288,6 +289,60 @@ class TrayContext : ApplicationContext
                 closeLabel.Visible = false;
         };
 
+        // 1) build one shared menu
+        var menu = new ContextMenuStrip();
+
+        // 1a) Show/Hide item
+        var showHideItem = new ToolStripMenuItem();
+        showHideItem.Click += (s, e) => {
+            if (clockForm.Visible)
+                HideClock();
+            else
+                ShowClock();
+        };
+        menu.Items.Add(showHideItem);
+
+        // 1b) Maximize/Unmaximize item (always shows first)
+        var maximizeItem = new ToolStripMenuItem();
+        maximizeItem.Click += (s, e) => {
+            if (!clockForm.Visible)
+                ShowClock();    // <-- ensure form is visible
+            // then toggle Maximize/Unmaximize
+            clockForm.WindowState = clockForm.WindowState == FormWindowState.Normal
+                ? FormWindowState.Maximized
+                : FormWindowState.Normal;
+        };
+        menu.Items.Add(maximizeItem);
+
+        // 1c) GitHub link
+        menu.Items.Add("GitHub Repo", null, (s,e) => {
+            Process.Start(new ProcessStartInfo {
+                FileName        = "https://github.com/alexchexes/Win11Seconds",
+                UseShellExecute = true
+            });
+        });
+
+        // 1d) Separator + Exit
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add("Exit", null, (s,e) => {
+            tray.Visible = false;
+            Application.ExitThread();
+        });
+
+        // 1e) Update all the dynamic texts when the menu opens
+        menu.Opening += (s, e) => {
+            // Show/Hide
+            showHideItem.Text = clockForm.Visible ? "Hide" : "Show";
+
+            // Maximize/Unmaximize
+            maximizeItem.Text = clockForm.WindowState == FormWindowState.Normal
+                ? "Maximize"
+                : "Unmaximize";
+        };
+
+        // 2) wire it up
+        tray.ContextMenuStrip      = menu;
+        clockForm.ContextMenuStrip = menu;
     }
 
     private void StartSynchronizedTimer()
@@ -338,15 +393,15 @@ class TrayContext : ApplicationContext
         }
         else
         {
-            const int offset = 14;
-            var cur = Cursor.Position;
-            var scr = Screen.FromPoint(cur);
-            int x = cur.X - clockForm.Width / 2;
-            int y = cur.Y - clockForm.Height - offset;
+            const int offset = 30;
+            var cursPos = Cursor.Position;
+            var scr = Screen.FromPoint(cursPos);
+            int x = cursPos.X - clockForm.Width / 2;
+            int y = cursPos.Y - clockForm.Height - offset;
             x = Math.Max(scr.WorkingArea.Left, Math.Min(x, scr.WorkingArea.Right - clockForm.Width));
             if (y < scr.WorkingArea.Top)
             {
-                y = cur.Y + offset;
+                y = cursPos.Y + offset;
             }
             clockForm.Location = new Point(x, y);
         }
