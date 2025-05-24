@@ -20,13 +20,9 @@ static class Program
 
 class TrayContext : ApplicationContext
 {
-    // P/Invoke for window dragging
-    [DllImport("user32.dll")] 
-    private static extern bool ReleaseCapture();
-    [DllImport("user32.dll")] 
-    private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
-    private const int WM_NCLBUTTONDOWN = 0xA1;
-    private const int HTCAPTION      = 0x2;
+    [DllImport("user32.dll")] private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+    const int WM_NCLBUTTONDOWN = 0xA1, HTCAPTION = 0x2;
 
     private readonly NotifyIcon tray;
     private readonly Form clockForm;
@@ -38,23 +34,27 @@ class TrayContext : ApplicationContext
 
     public TrayContext()
     {
-        // Detect Windows app theme
+        // detect light/dark
         isLightTheme = ((int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "AppsUseLightTheme", 1)) != 0;
 
-        // ── Tray Icon + Exit ───────────────────────────
+        // tray icon + menu
         tray = new NotifyIcon {
-            Icon            = SystemIcons.Application,
-            Text            = "Click to show seconds",
-            Visible         = true,
-            ContextMenuStrip= new ContextMenuStrip()
+            Icon             = SystemIcons.Application,
+            Text             = "Click to show seconds",
+            Visible          = true,
+            ContextMenuStrip = new ContextMenuStrip()
         };
-        tray.MouseUp += Tray_MouseUp;
-        tray.ContextMenuStrip.Items.Add("Exit", null, (_,__)=>
-            { tray.Visible=false; Application.ExitThread(); });
+        tray.MouseUp += (s,e) => {
+            if(e.Button==MouseButtons.Left) ToggleClock();
+        };
+        tray.ContextMenuStrip.Items.Add("Exit", null, (s,e) => {
+            tray.Visible = false;
+            Application.ExitThread();
+        });
 
-        // ── Popup Window ───────────────────────────────
+        // popup window
         clockForm = new Form {
             FormBorderStyle = FormBorderStyle.None,
             ShowInTaskbar   = false,
@@ -63,34 +63,17 @@ class TrayContext : ApplicationContext
             BackColor       = isLightTheme ? Color.White : Color.FromArgb(32,32,32),
             ClientSize      = new Size(200,80)
         };
-        clockForm.Load += (_,__) => ApplyRoundedCorners(12);
+        clockForm.Load   += (_,__) => ApplyRoundedCorners(12);
         clockForm.Resize += (_,__) => ApplyRoundedCorners(12);
-
-        // Intercept native close so we never Dispose
-        clockForm.FormClosing += (s,e)=> {
-            if(e.CloseReason==CloseReason.UserClosing){
-                e.Cancel=true;
+        clockForm.FormClosing += (s,e) => {
+            if(e.CloseReason==CloseReason.UserClosing) {
+                e.Cancel = true;
                 HideClock();
             }
         };
-        clockForm.Move += (_,__)=> lastLocation = clockForm.Location;
+        clockForm.Move += (_,__) => lastLocation = clockForm.Location;
 
-        // ── Close Button ──────────────────────────────
-        btnClose = new Button {
-            Text            = "✕",
-            FlatStyle       = FlatStyle.Flat,
-            ForeColor       = isLightTheme ? Color.Black : Color.White,
-            BackColor       = Color.Transparent,
-            Size            = new Size(24,24),
-            Location        = new Point(clockForm.ClientSize.Width-28,4),
-            Visible         = false,
-            TabStop         = false
-        };
-        btnClose.FlatAppearance.BorderSize = 0;
-        btnClose.Click += (_,__)=> HideClock();
-        clockForm.Controls.Add(btnClose);
-
-        // ── Clock Label ───────────────────────────────
+        // clock label
         timeLabel = new Label {
             Dock                      = DockStyle.Fill,
             Font                      = new Font("Segoe UI",24),
@@ -100,28 +83,42 @@ class TrayContext : ApplicationContext
         };
         clockForm.Controls.Add(timeLabel);
 
-        // ── Make both form & label draggable ──────────
+        // close button
+        btnClose = new Button {
+            Text      = "✕",
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.Transparent,
+            ForeColor = isLightTheme ? Color.Black : Color.White,
+            Size      = new Size(24,24),
+            Location  = new Point(clockForm.ClientSize.Width-28,4),
+            Visible   = false,
+            TabStop   = false
+        };
+        btnClose.FlatAppearance.BorderSize = 0;
+        btnClose.Click += (s,e) => HideClock();
+        clockForm.Controls.Add(btnClose);
+        btnClose.BringToFront();
+
+        // make draggable
         clockForm.MouseDown += DragWindow;
         timeLabel.MouseDown  += DragWindow;
+        // (no DragWindow on btnClose)
 
-        // ── Show/hide close button on hover ──────────
-        clockForm.MouseMove += OnPopupMouseMove;
-        clockForm.MouseLeave+= (_,__)=> btnClose.Visible = false;
+        // show/hide close button
+        clockForm.MouseMove  += OnPopupMouseMove;
+        timeLabel.MouseMove  += OnPopupMouseMove;  // fixed +=
+        clockForm.MouseLeave += (s,e) => btnClose.Visible = false;
+        // removed timeLabel.MouseLeave
 
-        // ── Timer ────────────────────────────────────
+        // timer
         timer = new System.Windows.Forms.Timer { Interval = 1000 };
-        timer.Tick += (_,__)=> timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
-    }
-
-    private void Tray_MouseUp(object? s, MouseEventArgs e)
-    {
-        if (e.Button==MouseButtons.Left) ToggleClock();
+        timer.Tick += (_,__) => timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
     }
 
     private void ToggleClock()
     {
         if (clockForm.Visible) HideClock();
-        else ShowClock();
+        else                 ShowClock();
     }
 
     private void ShowClock()
@@ -129,22 +126,22 @@ class TrayContext : ApplicationContext
         timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
         btnClose.Visible = false;
 
-        // reuse last dragged pos if valid
-        if (lastLocation.HasValue && 
-            Screen.AllScreens.Any(sc=> sc.WorkingArea.Contains(new Rectangle(lastLocation.Value,clockForm.Size))))
+        if (lastLocation.HasValue &&
+            Screen.AllScreens.Any(sc =>
+                sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))))
         {
             clockForm.Location = lastLocation.Value;
         }
         else
         {
-            const int offset=8;
-            var cur=Cursor.Position;
-            var scr=Screen.FromPoint(cur);
-            int x=cur.X-clockForm.Width/2;
-            int y=cur.Y-clockForm.Height-offset;
-            x=Math.Max(scr.WorkingArea.Left,Math.Min(x,scr.WorkingArea.Right-clockForm.Width));
-            if(y<scr.WorkingArea.Top) y=cur.Y+offset;
-            clockForm.Location=new Point(x,y);
+            const int off = 8;
+            var cur = Cursor.Position;
+            var scr = Screen.FromPoint(cur);
+            int x = cur.X - clockForm.Width/2;
+            int y = cur.Y - clockForm.Height - off;
+            x = Math.Max(scr.WorkingArea.Left, Math.Min(x, scr.WorkingArea.Right - clockForm.Width));
+            if(y < scr.WorkingArea.Top) y = cur.Y + off;
+            clockForm.Location = new Point(x,y);
         }
 
         clockForm.Show();
@@ -159,32 +156,27 @@ class TrayContext : ApplicationContext
 
     private void DragWindow(object? s, MouseEventArgs e)
     {
-        if(e.Button!=MouseButtons.Left) return;
+        if (e.Button!=MouseButtons.Left) return;
         ReleaseCapture();
-        SendMessage(clockForm.Handle,WM_NCLBUTTONDOWN,(IntPtr)HTCAPTION,IntPtr.Zero);
+        SendMessage(clockForm.Handle, WM_NCLBUTTONDOWN, (IntPtr)HTCAPTION, IntPtr.Zero);
     }
 
     private void OnPopupMouseMove(object? s, MouseEventArgs e)
     {
-        // if mouse within 30×30px of top-right corner
         var r = clockForm.ClientRectangle;
-        if (e.X >= r.Width-30 && e.Y <= 30)
-            btnClose.Visible = true;
-        else 
-            btnClose.Visible = false;
+        btnClose.Visible = (e.X >= r.Width - 30 && e.Y <= 30);
     }
 
-    private void ApplyRoundedCorners(int radius)
+    private void ApplyRoundedCorners(int r)
     {
-        var bounds = new Rectangle(0, 0, clockForm.Width, clockForm.Height);
+        var b = new Rectangle(0,0,clockForm.Width,clockForm.Height);
         using var path = new GraphicsPath();
-        path.AddArc(bounds.Left,  bounds.Top,     2*radius, 2*radius, 180, 90);
-        path.AddArc(bounds.Right-2*radius, bounds.Top,     2*radius, 2*radius, 270, 90);
-        path.AddArc(bounds.Right-2*radius, bounds.Bottom-2*radius, 2*radius, 2*radius, 0, 90);
-        path.AddArc(bounds.Left,  bounds.Bottom-2*radius, 2*radius, 2*radius, 90, 90);
+        path.AddArc(b.Left,    b.Top,    r*2, r*2, 180, 90);
+        path.AddArc(b.Right-r*2,b.Top,    r*2, r*2, 270, 90);
+        path.AddArc(b.Right-r*2,b.Bottom-r*2,r*2,r*2,   0, 90);
+        path.AddArc(b.Left,    b.Bottom-r*2,r*2,r*2,   90, 90);
         path.CloseFigure();
         clockForm.Region = new Region(path);
-        // ensure close button stays at top-right
-        btnClose.Location = new Point(clockForm.ClientSize.Width-28, 4);
+        btnClose.Location = new Point(clockForm.ClientSize.Width-28,4);
     }
 }
