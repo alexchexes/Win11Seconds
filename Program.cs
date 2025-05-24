@@ -157,9 +157,7 @@ class TrayContext : ApplicationContext
     public TrayContext()
     {
         // theme
-        isLightTheme = ((int?)Registry.GetValue(
-            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-            "AppsUseLightTheme", 1)) != 0;
+        isLightTheme = ReadOsTheme();
 
         // 2) Subscribe to OS theme changes
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
@@ -184,7 +182,6 @@ class TrayContext : ApplicationContext
             ShowInTaskbar = false,
             StartPosition = FormStartPosition.Manual,
             TopMost = true,
-            BackColor = isLightTheme ? Color.White : Color.FromArgb(32, 32, 32),
             ClientSize = new Size(200, 80),
             MinimumSize = new Size(120, 48)
         };
@@ -198,17 +195,8 @@ class TrayContext : ApplicationContext
                 ref pref,
                 sizeof(int)
             );
-            // border color fix: make the non-client caption strip at the top to match the background
-            int bgColor = isLightTheme
-                ? Color.White.ToArgb() & 0x00FFFFFF
-                : Color.FromArgb(32, 32, 32).ToArgb() & 0x00FFFFFF;
-
-            NativeMethods.DwmSetWindowAttribute(
-                clockForm.Handle,
-                NativeMethods.DWMWA_CAPTION_COLOR,
-                ref bgColor,
-                sizeof(int)
-            );
+            // border color fix: make DWM non-client strip color match bg
+            ApplyDwmCaptionColor();
         };
         clockForm.Resize += (s, e) =>
         {
@@ -243,7 +231,6 @@ class TrayContext : ApplicationContext
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI", 24),
             TextAlign = ContentAlignment.MiddleCenter,
-            ForeColor = isLightTheme ? Color.Black : Color.White,
             UseCompatibleTextRendering = true
         };
         clockForm.Controls.Add(timeLabel);
@@ -255,7 +242,6 @@ class TrayContext : ApplicationContext
             Font = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = clockForm.BackColor,
-            ForeColor = isLightTheme ? Color.Black : Color.White,
             Size = new Size(24, 24),
             Location = new Point(clockForm.ClientSize.Width - 28, 4),
             Visible = false,
@@ -345,7 +331,65 @@ class TrayContext : ApplicationContext
         // 2) wire it up
         tray.ContextMenuStrip = menu;
         clockForm.ContextMenuStrip = menu;
+
+        ApplyTheme();
     }
+
+    private static bool ReadOsTheme()
+    {
+        return ((int?)Registry.GetValue(
+            @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+            "AppsUseLightTheme", 1)) != 0;
+    }
+    
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != UserPreferenceCategory.General) return;
+
+        bool nowLight = ReadOsTheme();
+        if (nowLight == isLightTheme) return;
+
+        isLightTheme = nowLight;
+        ApplyTheme();
+    }
+    private void ApplyTheme()
+    {
+        // 1) Tray icon
+        UpdateTrayIcon();
+
+        // 2) Popup background
+        var bg = isLightTheme
+            ? Color.White
+            : Color.FromArgb(32, 32, 32);
+        clockForm.BackColor      = bg;
+        closeLabel.BackColor     = bg;
+
+        // 3) Foreground of our labels
+        var fg = isLightTheme
+            ? Color.Black
+            : Color.White;
+        timeLabel.ForeColor   = fg;
+        closeLabel.ForeColor  = fg;
+
+        // 4) border color fix: make DWM non-client strip color match bg
+        if (clockForm.IsHandleCreated)
+        {
+            ApplyDwmCaptionColor();
+        }
+    }
+
+    private void ApplyDwmCaptionColor()
+    {
+        // strip color must be RGB, drop alpha
+        var bg = clockForm.BackColor;
+        int colorRef = bg.ToArgb() & 0x00FFFFFF;
+        NativeMethods.DwmSetWindowAttribute(
+            clockForm.Handle,
+            NativeMethods.DWMWA_CAPTION_COLOR,
+            ref colorRef,
+            sizeof(int));
+    }
+
 
     private void UpdateTrayIcon()
     {
@@ -359,21 +403,6 @@ class TrayContext : ApplicationContext
         tray.Icon = iconStream != null
             ? new Icon(iconStream)
             : SystemIcons.Application;
-    }
-
-    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
-    {
-        if (e.Category == UserPreferenceCategory.General)
-        {
-            bool nowLight = ((int?)Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                "AppsUseLightTheme", 1)) != 0;
-            if (nowLight != isLightTheme)
-            {
-                isLightTheme = nowLight;
-                UpdateTrayIcon();
-            }
-        }
     }
 
     private void StartSynchronizedTimer()
