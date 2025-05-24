@@ -7,6 +7,7 @@ using System.Diagnostics;  // for Process.Start
 
 static class NativeMethods
 {
+    // Calls the Windows DWM API to set visual attributes on a window (e.g., rounded corners, border color)
     [DllImport("dwmapi.dll", PreserveSig = true)]
     public static extern int DwmSetWindowAttribute(
         IntPtr hwnd, int attr, ref int attrValue, int attrSize);
@@ -28,6 +29,7 @@ public class SmoothLabel : Label
 {
     public SmoothLabel()
     {
+        // Enable double buffering and custom painting to reduce flicker
         SetStyle(ControlStyles.OptimizedDoubleBuffer
                | ControlStyles.UserPaint
                | ControlStyles.AllPaintingInWmPaint, true);
@@ -54,6 +56,7 @@ public class SmoothLabel : Label
 
 class BorderlessResizableForm : Form
 {
+    // Windows message and hit test constants for resizing
     const int WM_NCHITTEST = 0x84;
     const int HTCLIENT = 1;
     const int HTLEFT = 10;
@@ -79,6 +82,7 @@ class BorderlessResizableForm : Form
         get
         {
             var cp = base.CreateParams;
+            // Allow resizing (WS_THICKFRAME) and enable window compositing for smoother visuals
             cp.Style |= WS_THICKFRAME;
             const int WS_EX_COMPOSITED = 0x02000000;
             cp.ExStyle |= WS_EX_COMPOSITED;
@@ -88,6 +92,7 @@ class BorderlessResizableForm : Form
 
     protected override void WndProc(ref Message m)
     {
+        // Custom hit-testing for resizing from borders and corners
         if (m.Msg == WM_NCHITTEST)
         {
             var p = PointToClient(Cursor.Position);
@@ -104,6 +109,7 @@ class BorderlessResizableForm : Form
             return;
         }
 
+        // Enforce fixed aspect ratio on resizing
         if (m.Msg == WM_SIZING)
         {
             float aspect = 200f / 80f;
@@ -136,11 +142,10 @@ static class Program
 
 class TrayContext : ApplicationContext
 {
-    // constants for dragging
+    // Native methods/constants for dragging borderless window
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
     [DllImport("user32.dll")]
-    private static extern IntPtr SendMessage(
-        IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+    private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
     const int WM_NCLBUTTONDOWN = 0xA1, HTCAPTION = 0x2;
 
     private readonly NotifyIcon tray;
@@ -152,32 +157,72 @@ class TrayContext : ApplicationContext
     private bool isLightTheme;
     private Point? lastLocation;
     private bool _firstTick;
-
-
+    
     public TrayContext()
     {
-        // theme
+        // Read initial theme from OS
         isLightTheme = ReadOsTheme();
 
-        // 2) Subscribe to OS theme changes
+        // Subscribe to theme changes
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
 
-        // tray icon
-        tray = new NotifyIcon
+        // Initialize tray icon
+        tray = CreateTrayIcon();
+        UpdateTrayIcon();
+
+        // Create popup form (hidden clock window)
+        clockForm = CreateClockForm();
+        timeLabel = CreateTimeLabel();
+        closeLabel = CreateCloseLabel();
+
+        clockForm.Controls.Add(timeLabel);
+        clockForm.Controls.Add(closeLabel);
+        closeLabel.BringToFront();
+
+        SetupFormEvents();
+
+        // === Setup timers ===
+
+        // Timers for time updating
+        timer = new System.Windows.Forms.Timer();
+        timer.Tick += Timer_Tick;
+
+        // Timer for auto-hiding close button
+        closeHideTimer = new System.Windows.Forms.Timer { Interval = 100 };
+        closeHideTimer.Tick += (s, e) =>
+        {
+            // Hide close button if cursor leaves popup form
+            if (closeLabel.Visible && !clockForm.Bounds.Contains(Cursor.Position))
+            {
+                closeLabel.Visible = false;
+            }
+        };
+
+        // Context menu for both tray and popup
+        var menu = CreateContextMenu();
+        tray.ContextMenuStrip = menu;
+        clockForm.ContextMenuStrip = menu;
+
+        ApplyTheme();
+    }
+
+    private NotifyIcon CreateTrayIcon()
+    {
+        var icon = new NotifyIcon
         {
             Text = "Win11Seconds - Click to show clock",
             Visible = true,
-            // ContextMenuStrip = new ContextMenuStrip()
         };
-
-        UpdateTrayIcon();
-
-
-        tray.MouseUp += (s, e) => { if (e.Button == MouseButtons.Left) ToggleClock(); };
-        // tray.ContextMenuStrip.Items.Add("Exit", null, (s, e) => { tray.Visible = false; Application.ExitThread(); });
-
-        // popup
-        clockForm = new BorderlessResizableForm
+        icon.MouseUp += (s, e) =>
+        {
+            if (e.Button == MouseButtons.Left) ToggleClock();
+        };
+        return icon;
+    }
+    
+    private BorderlessResizableForm CreateClockForm()
+    {
+        var form = new BorderlessResizableForm
         {
             ShowInTaskbar = false,
             StartPosition = FormStartPosition.Manual,
@@ -185,12 +230,12 @@ class TrayContext : ApplicationContext
             ClientSize = new Size(200, 80),
             MinimumSize = new Size(120, 48)
         };
-        clockForm.HandleCreated += (s, e) =>
+        form.HandleCreated += (s, e) =>
         {
-            // corner rounding
+            // Apply rounded corners and match DWM border/caption color to form background
             int pref = (int)NativeMethods.DwmWindowCornerPreference.DWMWCP_ROUND;
             NativeMethods.DwmSetWindowAttribute(
-                clockForm.Handle,
+                form.Handle,
                 NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
                 ref pref,
                 sizeof(int)
@@ -198,45 +243,25 @@ class TrayContext : ApplicationContext
             // border color fix: make DWM non-client strip color match bg
             ApplyDwmCaptionColor();
         };
-        clockForm.Resize += (s, e) =>
-        {
-            const int pad = 4;
-            int availW = clockForm.ClientSize.Width - pad * 2;
-            int availH = clockForm.ClientSize.Height - pad * 2;
+        return form;
+    }
 
-            // pick a starting guess for font-size (use the height)
-            float testSize = availH;
-            using var g = clockForm.CreateGraphics();
-            // measure at that size
-            using var testFont = new Font("Segoe UI", testSize, FontStyle.Regular);
-            SizeF measure = g.MeasureString(timeLabel!.Text, testFont);
-
-            // compute scale factors so it fits both width and height
-            float scaleW = availW / measure.Width;
-            float scaleH = availH / measure.Height;
-            float newSize = testSize * Math.Min(scaleW, scaleH);
-
-            // apply it
-            timeLabel.Font = new Font("Segoe UI", newSize, FontStyle.Regular);
-
-            // reposition close-label
-            closeLabel!.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 0);
-        };
-        clockForm.FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; HideClock(); } };
-        clockForm.Move += (s, e) => lastLocation = clockForm.Location;
-
-        // clock label
-        timeLabel = new SmoothLabel
+    // Create main clock label (centered time text)
+    private static SmoothLabel CreateTimeLabel()
+    {
+        return new SmoothLabel
         {
             Dock = DockStyle.Fill,
             Font = new Font("Segoe UI", 24),
             TextAlign = ContentAlignment.MiddleCenter,
             UseCompatibleTextRendering = true
         };
-        clockForm.Controls.Add(timeLabel);
+    }
 
-        // close ✕
-        closeLabel = new Label
+    // Creates hidden close (✕) label at top-right corner
+    private Label CreateCloseLabel()
+    {
+        return new Label
         {
             Text = "✕",
             Font = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size),
@@ -247,11 +272,27 @@ class TrayContext : ApplicationContext
             Visible = false,
             Cursor = Cursors.Hand
         };
-        closeLabel.Click += (s, e) => HideClock();
-        clockForm.Controls.Add(closeLabel);
-        closeLabel.BringToFront();
+    }
 
-        // mouse move, clicks & drag
+    private void SetupFormEvents()
+    {
+        // Auto-resize font to fit form and move close button on resize
+        clockForm.Resize += (s, e) => AutoResizeFontAndCloseLabel();
+        
+        // Intercept user-initiated closing and just hide instead
+        clockForm.FormClosing += (s, e) =>
+        {
+            if (e.CloseReason == CloseReason.UserClosing)
+            {
+                e.Cancel = true; HideClock();
+            }
+        };
+        clockForm.Move += (s, e) => lastLocation = clockForm.Location;
+
+        // Add hidden close (✕) label at top-right corner
+        closeLabel.Click += (s, e) => HideClock();
+
+        // Enable dragging and mouse handling for both form and label
         clockForm.MouseDown += DragWindow;
         timeLabel.MouseDown += DragWindow;
         clockForm.MouseMove += OnPopupMouseMove;
@@ -259,22 +300,41 @@ class TrayContext : ApplicationContext
         closeLabel.MouseMove += OnPopupMouseMove;
         clockForm.MouseDown += OnPopupMouseDown;
         timeLabel.MouseDown += OnPopupMouseDown;
+        // Hide close button when mouse leaves the form
         clockForm.MouseLeave += (s, e) => closeLabel.Visible = false;
+    }
 
-        // timers
-        timer = new System.Windows.Forms.Timer();
-        timer.Tick += Timer_Tick;
-        closeHideTimer = new System.Windows.Forms.Timer { Interval = 100 };
-        closeHideTimer.Tick += (s, e) =>
-        {
-            if (closeLabel.Visible && !clockForm.Bounds.Contains(Cursor.Position))
-                closeLabel.Visible = false;
-        };
+    private void AutoResizeFontAndCloseLabel()
+    {
+        const int pad = 4;
+        int availW = clockForm.ClientSize.Width - pad * 2;
+        int availH = clockForm.ClientSize.Height - pad * 2;
 
-        // 1) build one shared menu
+        // Estimate initial font size based on height
+        float testSize = availH;
+        using var g = clockForm.CreateGraphics();
+        // measure at that size
+        using var testFont = new Font("Segoe UI", testSize, FontStyle.Regular);
+        SizeF measure = g.MeasureString(timeLabel!.Text, testFont);
+
+        // Compute scale factors so it fits both width and height
+        float scaleW = availW / measure.Width;
+        float scaleH = availH / measure.Height;
+        float newSize = testSize * Math.Min(scaleW, scaleH);
+
+        // apply it
+        timeLabel.Font = new Font("Segoe UI", newSize, FontStyle.Regular);
+
+        // Reposition close button in top-right corner
+        closeLabel!.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 0);
+    }
+
+    // Context menu for both tray and popup
+    private ContextMenuStrip CreateContextMenu()
+    {
         var menu = new ContextMenuStrip();
 
-        // 1a) Show/Hide item
+        // Show/Hide toggle menu item
         var showHideItem = new ToolStripMenuItem();
         showHideItem.Click += (s, e) =>
         {
@@ -285,20 +345,20 @@ class TrayContext : ApplicationContext
         };
         menu.Items.Add(showHideItem);
 
-        // 1b) Maximize/Unmaximize item (always shows first)
+        // Maximize/Unmaximize menu item
         var maximizeItem = new ToolStripMenuItem();
         maximizeItem.Click += (s, e) =>
         {
             if (!clockForm.Visible)
-                ShowClock();    // <-- ensure form is visible
-            // then toggle Maximize/Unmaximize
+                ShowClock();  // Ensure form is visible first
+            // Toggle window Maximize/Unmaximize state
             clockForm.WindowState = clockForm.WindowState == FormWindowState.Normal
                 ? FormWindowState.Maximized
                 : FormWindowState.Normal;
         };
         menu.Items.Add(maximizeItem);
 
-        // 1c) GitHub link
+        // GitHub repo link
         menu.Items.Add("GitHub Repo", null, (s, e) =>
         {
             Process.Start(new ProcessStartInfo
@@ -308,7 +368,7 @@ class TrayContext : ApplicationContext
             });
         });
 
-        // 1d) Separator + Exit
+        // Separator and Exit item
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Exit", null, (s, e) =>
         {
@@ -316,32 +376,29 @@ class TrayContext : ApplicationContext
             Application.ExitThread();
         });
 
-        // 1e) Update all the dynamic texts when the menu opens
+        // Update menu item texts dynamically before menu opens
         menu.Opening += (s, e) =>
         {
             // Show/Hide
             showHideItem.Text = clockForm.Visible ? "Hide" : "Show";
-
             // Maximize/Unmaximize
             maximizeItem.Text = clockForm.WindowState == FormWindowState.Normal
                 ? "Maximize"
                 : "Unmaximize";
         };
 
-        // 2) wire it up
-        tray.ContextMenuStrip = menu;
-        clockForm.ContextMenuStrip = menu;
-
-        ApplyTheme();
+        return menu;
     }
 
+    // Reads Windows AppsUseLightTheme registry value (returns true for light, false for dark)
     private static bool ReadOsTheme()
     {
         return ((int?)Registry.GetValue(
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "AppsUseLightTheme", 1)) != 0;
     }
-    
+
+    // Handles OS theme changes (Win11 light/dark mode)
     private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
     {
         if (e.Category != UserPreferenceCategory.General) return;
@@ -352,32 +409,34 @@ class TrayContext : ApplicationContext
         isLightTheme = nowLight;
         ApplyTheme();
     }
+
     private void ApplyTheme()
     {
-        // 1) Tray icon
+        // Update tray icon
         UpdateTrayIcon();
 
-        // 2) Popup background
+        // Update background color of popup and close label
         var bg = isLightTheme
             ? Color.White
             : Color.FromArgb(32, 32, 32);
-        clockForm.BackColor      = bg;
-        closeLabel.BackColor     = bg;
+        clockForm.BackColor = bg;
+        closeLabel.BackColor = bg;
 
-        // 3) Foreground of our labels
+        // Update foreground color of labels
         var fg = isLightTheme
             ? Color.Black
             : Color.White;
-        timeLabel.ForeColor   = fg;
-        closeLabel.ForeColor  = fg;
+        timeLabel.ForeColor = fg;
+        closeLabel.ForeColor = fg;
 
-        // 4) border color fix: make DWM non-client strip color match bg
+        // Make DWM non-client strip color match bg
         if (clockForm.IsHandleCreated)
         {
             ApplyDwmCaptionColor();
         }
     }
 
+    // Updates DWM's caption color (for non-client areas) to match form's background
     private void ApplyDwmCaptionColor()
     {
         // strip color must be RGB, drop alpha
@@ -390,7 +449,7 @@ class TrayContext : ApplicationContext
             sizeof(int));
     }
 
-
+    // Loads correct tray icon resource for light/dark mode
     private void UpdateTrayIcon()
     {
         var asm = Assembly.GetExecutingAssembly();
@@ -405,6 +464,7 @@ class TrayContext : ApplicationContext
             : SystemIcons.Application;
     }
 
+    // Starts timer with a short first interval so updates always happen "on the second"
     private void StartSynchronizedTimer()
     {
         _firstTick = true;
@@ -412,6 +472,7 @@ class TrayContext : ApplicationContext
         timer.Start();
     }
 
+    // On every timer tick, update clock text; set exact interval after first tick
     private void Timer_Tick(object? s, EventArgs e)
     {
         timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
@@ -422,6 +483,7 @@ class TrayContext : ApplicationContext
         }
     }
 
+    // Handles double-click on popup to maximize/unmaximize, except on close button
     private void OnPopupMouseDown(object? s, MouseEventArgs e)
     {
         if (e.Button == MouseButtons.Left && e.Clicks == 2)
@@ -438,18 +500,25 @@ class TrayContext : ApplicationContext
         }
     }
 
-
+    // Shows or hides clock popup
     private void ToggleClock()
     {
         if (clockForm.Visible) HideClock(); else ShowClock();
     }
 
+    // Shows clock window, positions near cursor, starts timer
     private void ShowClock()
     {
         timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
         closeLabel.BringToFront();
 
-        if (lastLocation.HasValue && Screen.AllScreens.Any(sc => sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))))
+        // Restore previous location if it's still on-screen, else show near cursor
+        if (
+            lastLocation.HasValue
+            && Screen.AllScreens.Any(
+                sc => sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))
+            )
+        )
         {
             clockForm.Location = lastLocation.Value;
         }
@@ -468,10 +537,11 @@ class TrayContext : ApplicationContext
             clockForm.Location = new Point(x, y);
         }
         clockForm.Show();
-        StartSynchronizedTimer();  // ← use our accurate timer
+        StartSynchronizedTimer();  // Start timer aligned to the next second
         closeHideTimer.Start();
     }
 
+    // Hides clock popup and stops timers
     private void HideClock()
     {
         timer.Stop();
@@ -480,6 +550,7 @@ class TrayContext : ApplicationContext
         clockForm.Hide();
     }
 
+    // Allows window dragging by sending WM_NCLBUTTONDOWN to OS
     private void DragWindow(object? s, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
@@ -494,7 +565,7 @@ class TrayContext : ApplicationContext
         const int hoverSize = 30, margin = 7;
         int region = hoverSize + margin;
 
-        // show only if the mouse (relative to the form) is in that top-right band:
+        // Shows close button only when mouse is in top-right region of popup (relative to the form)
         closeLabel.Visible = p.X >= r.Width - region && p.Y <= region;
     }
 }
