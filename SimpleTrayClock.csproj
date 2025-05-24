@@ -6,6 +6,12 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
+    
+    <ApplicationIcon>tray.ico</ApplicationIcon>
+    <Win32Icon>tray.ico</Win32Icon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="tray.ico" />
+  </ItemGroup>
 </Project>
