@@ -7,11 +7,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     
-    <ApplicationIcon>tray.ico</ApplicationIcon>
-    <Win32Icon>tray.ico</Win32Icon>
+    <ApplicationIcon>exe.ico</ApplicationIcon>
+    <Win32Icon>exe.ico</Win32Icon>
   </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="tray.ico" />
+    <EmbeddedResource Include="tray_light.ico" />
+    <EmbeddedResource Include="tray_dark.ico"  />
   </ItemGroup>
 </Project>

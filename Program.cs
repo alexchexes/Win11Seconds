@@ -149,7 +149,7 @@ class TrayContext : ApplicationContext
     private readonly Label closeLabel;
     private readonly System.Windows.Forms.Timer timer;
     private readonly System.Windows.Forms.Timer closeHideTimer;
-    private readonly bool isLightTheme;
+    private bool isLightTheme;
     private Point? lastLocation;
     private bool _firstTick;
 
@@ -161,19 +161,18 @@ class TrayContext : ApplicationContext
             @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
             "AppsUseLightTheme", 1)) != 0;
 
+        // 2) Subscribe to OS theme changes
+        SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+
         // tray icon
         tray = new NotifyIcon
         {
-            Text = "Click to show clock",
+            Text = "Win11Seconds - Click to show clock",
             Visible = true,
             // ContextMenuStrip = new ContextMenuStrip()
         };
-        // load embedded icon
-        var asm = Assembly.GetExecutingAssembly();
-        using var iconStream = asm.GetManifestResourceStream("SimpleTrayClock.tray.ico");
-        tray.Icon = iconStream != null
-            ? new Icon(iconStream)
-            : SystemIcons.Application;
+
+        UpdateTrayIcon();
 
 
         tray.MouseUp += (s, e) => { if (e.Button == MouseButtons.Left) ToggleClock(); };
@@ -233,10 +232,7 @@ class TrayContext : ApplicationContext
             timeLabel.Font = new Font("Segoe UI", newSize, FontStyle.Regular);
 
             // reposition close-label
-            closeLabel!.Location = new Point(
-                clockForm.ClientSize.Width - closeLabel.Width - 4,
-                4
-            );
+            closeLabel!.Location = new Point(clockForm.ClientSize.Width - closeLabel.Width - 4, 0);
         };
         clockForm.FormClosing += (s, e) => { if (e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; HideClock(); } };
         clockForm.Move += (s, e) => lastLocation = clockForm.Location;
@@ -294,7 +290,8 @@ class TrayContext : ApplicationContext
 
         // 1a) Show/Hide item
         var showHideItem = new ToolStripMenuItem();
-        showHideItem.Click += (s, e) => {
+        showHideItem.Click += (s, e) =>
+        {
             if (clockForm.Visible)
                 HideClock();
             else
@@ -304,7 +301,8 @@ class TrayContext : ApplicationContext
 
         // 1b) Maximize/Unmaximize item (always shows first)
         var maximizeItem = new ToolStripMenuItem();
-        maximizeItem.Click += (s, e) => {
+        maximizeItem.Click += (s, e) =>
+        {
             if (!clockForm.Visible)
                 ShowClock();    // <-- ensure form is visible
             // then toggle Maximize/Unmaximize
@@ -315,22 +313,26 @@ class TrayContext : ApplicationContext
         menu.Items.Add(maximizeItem);
 
         // 1c) GitHub link
-        menu.Items.Add("GitHub Repo", null, (s,e) => {
-            Process.Start(new ProcessStartInfo {
-                FileName        = "https://github.com/alexchexes/Win11Seconds",
+        menu.Items.Add("GitHub Repo", null, (s, e) =>
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = "https://github.com/alexchexes/Win11Seconds",
                 UseShellExecute = true
             });
         });
 
         // 1d) Separator + Exit
         menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Exit", null, (s,e) => {
+        menu.Items.Add("Exit", null, (s, e) =>
+        {
             tray.Visible = false;
             Application.ExitThread();
         });
 
         // 1e) Update all the dynamic texts when the menu opens
-        menu.Opening += (s, e) => {
+        menu.Opening += (s, e) =>
+        {
             // Show/Hide
             showHideItem.Text = clockForm.Visible ? "Hide" : "Show";
 
@@ -341,8 +343,37 @@ class TrayContext : ApplicationContext
         };
 
         // 2) wire it up
-        tray.ContextMenuStrip      = menu;
+        tray.ContextMenuStrip = menu;
         clockForm.ContextMenuStrip = menu;
+    }
+
+    private void UpdateTrayIcon()
+    {
+        var asm = Assembly.GetExecutingAssembly();
+        // pick the right resource name
+        string resName = isLightTheme
+            ? "Win11Seconds.tray_dark.ico"
+            : "Win11Seconds.tray_light.ico";
+
+        using var iconStream = asm.GetManifestResourceStream(resName);
+        tray.Icon = iconStream != null
+            ? new Icon(iconStream)
+            : SystemIcons.Application;
+    }
+
+    private void OnUserPreferenceChanged(object? sender, UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category == UserPreferenceCategory.General)
+        {
+            bool nowLight = ((int?)Registry.GetValue(
+                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "AppsUseLightTheme", 1)) != 0;
+            if (nowLight != isLightTheme)
+            {
+                isLightTheme = nowLight;
+                UpdateTrayIcon();
+            }
+        }
     }
 
     private void StartSynchronizedTimer()
@@ -367,7 +398,10 @@ class TrayContext : ApplicationContext
         if (e.Button == MouseButtons.Left && e.Clicks == 2)
         {
             var pt = clockForm.PointToClient(Cursor.Position);
-            if (closeLabel.Bounds.Contains(pt)) return;
+            if (closeLabel.Bounds.Contains(pt))
+            {
+                return;
+            }
             clockForm.WindowState = clockForm.WindowState == FormWindowState.Normal
                 ? FormWindowState.Maximized
                 : FormWindowState.Normal;
@@ -386,8 +420,7 @@ class TrayContext : ApplicationContext
         timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
         closeLabel.BringToFront();
 
-        if (lastLocation.HasValue &&
-            Screen.AllScreens.Any(sc => sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))))
+        if (lastLocation.HasValue && Screen.AllScreens.Any(sc => sc.WorkingArea.Contains(new Rectangle(lastLocation.Value, clockForm.Size))))
         {
             clockForm.Location = lastLocation.Value;
         }
@@ -433,6 +466,6 @@ class TrayContext : ApplicationContext
         int region = hoverSize + margin;
 
         // show only if the mouse (relative to the form) is in that top-right band:
-        closeLabel.Visible = (p.X >= r.Width - region && p.Y <= region);
+        closeLabel.Visible = p.X >= r.Width - region && p.Y <= region;
     }
 }
