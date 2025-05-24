@@ -1,10 +1,22 @@
-using System;
-using System.Drawing;
-using System.Drawing.Drawing2D;
-using System.Linq;
 using System.Runtime.InteropServices;
-using System.Windows.Forms;
+using System.Diagnostics;
 using Microsoft.Win32;
+
+static class NativeMethods
+{
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    public static extern int DwmSetWindowAttribute(
+        IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+    public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    public enum DwmWindowCornerPreference
+    {
+        DWMWCP_DEFAULT    = 0,
+        DWMWCP_DONOTROUND = 1,
+        DWMWCP_ROUND      = 2,  // full Win11 radius
+        DWMWCP_ROUNDSMALL = 3   // slightly smaller
+    }
+}
 
 static class Program
 {
@@ -30,6 +42,7 @@ class TrayContext : ApplicationContext
     private readonly Label timeLabel;
     private readonly Label closeLabel;     // replaced Button with Label
     private readonly System.Windows.Forms.Timer timer;
+    private readonly System.Windows.Forms.Timer closeHideTimer;
     private readonly bool isLightTheme;
     private Point? lastLocation;
 
@@ -55,14 +68,29 @@ class TrayContext : ApplicationContext
         clockForm = new Form
         {
             FormBorderStyle = FormBorderStyle.None,
-            ShowInTaskbar   = false,
-            StartPosition   = FormStartPosition.Manual,
-            TopMost         = true,
-            BackColor       = isLightTheme ? Color.White : Color.FromArgb(32, 32, 32),
-            ClientSize      = new Size(200, 80)
+            ShowInTaskbar = false,
+            StartPosition = FormStartPosition.Manual,
+            TopMost = true,
+            BackColor = isLightTheme ? Color.White : Color.FromArgb(32, 32, 32),
+            ClientSize = new Size(200, 80)
         };
-        clockForm.Load   += (_, __) => ApplyRoundedCorners(12);
-        clockForm.Resize += (_, __) => ApplyRoundedCorners(12);
+
+        clockForm.HandleCreated += (s, e) =>
+        {
+            int pref = (int)NativeMethods.DwmWindowCornerPreference.DWMWCP_ROUND;
+            int hr = NativeMethods.DwmSetWindowAttribute(
+                clockForm.Handle,
+                NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
+                ref pref,
+                sizeof(int)
+            );
+            if (hr != 0)
+            {
+                // non-zero means failure: you can log or ignore
+                Debug.WriteLine($"DwmSetWindowAttribute failed: 0x{hr:X8}");
+            }
+        };
+
         clockForm.FormClosing += (s, e) =>
         {
             if (e.CloseReason == CloseReason.UserClosing)
@@ -76,10 +104,10 @@ class TrayContext : ApplicationContext
         // clock label
         timeLabel = new Label
         {
-            Dock                      = DockStyle.Fill,
-            Font                      = new Font("Segoe UI", 24),
-            TextAlign                 = ContentAlignment.MiddleCenter,
-            ForeColor                 = isLightTheme ? Color.Black : Color.White,
+            Dock = DockStyle.Fill,
+            Font = new Font("Segoe UI", 24),
+            TextAlign = ContentAlignment.MiddleCenter,
+            ForeColor = isLightTheme ? Color.Black : Color.White,
             UseCompatibleTextRendering = true
         };
         clockForm.Controls.Add(timeLabel);
@@ -87,14 +115,14 @@ class TrayContext : ApplicationContext
         // close label (pure ✕, no background or border)
         closeLabel = new Label
         {
-            Text      = "✕",
-            Font      = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size, FontStyle.Regular),
+            Text = "✕",
+            Font = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size, FontStyle.Regular),
             TextAlign = ContentAlignment.MiddleCenter,
             BackColor = Color.Transparent,
             ForeColor = isLightTheme ? Color.Black : Color.White,
-            Size      = new Size(24, 24),
-            Location  = new Point(clockForm.ClientSize.Width - 28, 4),
-            Visible   = false
+            Size = new Size(24, 24),
+            Location = new Point(clockForm.ClientSize.Width - 28, 4),
+            Visible = false
         };
         closeLabel.Click += (s, e) => HideClock();
         clockForm.Controls.Add(closeLabel);
@@ -102,16 +130,25 @@ class TrayContext : ApplicationContext
 
         // draggable everywhere except close label
         clockForm.MouseDown += DragWindow;
-        timeLabel.MouseDown  += DragWindow;
+        timeLabel.MouseDown += DragWindow;
 
         // hover region with margin
-        clockForm.MouseMove  += OnPopupMouseMove;
-        timeLabel.MouseMove  += OnPopupMouseMove;
+        clockForm.MouseMove += OnPopupMouseMove;
+        timeLabel.MouseMove += OnPopupMouseMove;
         clockForm.MouseLeave += (s, e) => closeLabel.Visible = false;
 
         // timer
         timer = new System.Windows.Forms.Timer { Interval = 1000 };
         timer.Tick += (_, __) => timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
+        
+        // in your constructor, after you set up your existing timer:
+        closeHideTimer = new System.Windows.Forms.Timer { Interval = 100 };
+        closeHideTimer.Tick += (s, e) =>
+        {
+            // if the close-label is visible but our cursor is no longer over the form...
+            if (closeLabel.Visible && !clockForm.Bounds.Contains(Cursor.Position))
+                closeLabel.Visible = false;
+        };
     }
 
     private void ToggleClock()
@@ -122,7 +159,7 @@ class TrayContext : ApplicationContext
 
     private void ShowClock()
     {
-        timeLabel.Text      = DateTime.Now.ToString("HH:mm:ss");
+        timeLabel.Text = DateTime.Now.ToString("HH:mm:ss");
         closeLabel.Visible = false;
 
         if (lastLocation.HasValue &&
@@ -144,12 +181,14 @@ class TrayContext : ApplicationContext
 
         clockForm.Show();
         timer.Start();
+        closeHideTimer.Start();
     }
 
     private void HideClock()
     {
         timer.Stop();
         clockForm.Hide();
+        closeHideTimer.Stop();
     }
 
     private void DragWindow(object? s, MouseEventArgs e)
@@ -165,18 +204,5 @@ class TrayContext : ApplicationContext
         const int baseSize = 30, margin = 7;
         int region = baseSize + margin;
         closeLabel.Visible = (e.X >= r.Width - region && e.Y <= region);
-    }
-
-    private void ApplyRoundedCorners(int r)
-    {
-        var b = new Rectangle(0, 0, clockForm.Width, clockForm.Height);
-        using var path = new GraphicsPath();
-        path.AddArc(b.Left, b.Top, r*2, r*2, 180, 90);
-        path.AddArc(b.Right - r*2, b.Top, r*2, r*2, 270, 90);
-        path.AddArc(b.Right - r*2, b.Bottom - r*2, r*2, r*2,   0, 90);
-        path.AddArc(b.Left, b.Bottom - r*2, r*2, r*2,  90, 90);
-        path.CloseFigure();
-        clockForm.Region = new Region(path);
-        closeLabel.Location = new Point(clockForm.ClientSize.Width - 28, 4);
     }
 }
