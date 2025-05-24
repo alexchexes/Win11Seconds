@@ -9,6 +9,9 @@
     
     <ApplicationIcon>exe.ico</ApplicationIcon>
     <Win32Icon>exe.ico</Win32Icon>
+
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
   </PropertyGroup>
 
   <ItemGroup>
