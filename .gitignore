@@ -36,7 +36,7 @@ artifacts/
 # Mono
 mono_crash.*
 
-# Publish output (you’ll manually upload .exe to GitHub Releases)
+# Publish output
 **/publish/
 
 # Visual Studio cache
