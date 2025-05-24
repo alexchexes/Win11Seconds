@@ -268,14 +268,14 @@ class TrayContext : ApplicationContext
         clockForm.Controls.Add(closeLabel);
         closeLabel.BringToFront();
 
-        // mouse & drag
+        // mouse move, clicks & drag
         clockForm.MouseDown += DragWindow;
         timeLabel.MouseDown += DragWindow;
-
         clockForm.MouseMove += OnPopupMouseMove;
         timeLabel.MouseMove += OnPopupMouseMove;
         closeLabel.MouseMove += OnPopupMouseMove;
-
+        clockForm.MouseDown += OnPopupMouseDown;
+        timeLabel.MouseDown += OnPopupMouseDown;
         clockForm.MouseLeave += (s, e) => closeLabel.Visible = false;
 
         // timers
@@ -288,8 +288,6 @@ class TrayContext : ApplicationContext
                 closeLabel.Visible = false;
         };
 
-        clockForm.MouseDown += OnPopupMouseDown;
-        timeLabel.MouseDown += OnPopupMouseDown;
     }
 
     private void StartSynchronizedTimer()
