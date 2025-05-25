@@ -9,6 +9,8 @@
 * [Troubleshooting](#troubleshooting)
 * [Development](#dev)
 
+![2025-05-25--11-49-39--556](https://github.com/user-attachments/assets/26adb548-0c6e-4587-9741-542b4a4902b0)
+
 ## Why
 
 Microsoft removed a very simple but useful feature from Windows 11: clicking on the system clock in the tray no longer shows the clock with seconds ticking in real time. Nobody has any idea why they would do that (except, perhaps, their ignorance) but people really miss it:
@@ -28,6 +30,7 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 - Click the tray icon and see the `HH:mm:ss` ticking in real time
 - Dark/light theme auto-detect
 - Resizable, drag-to-move, double-click to maximize/unmaximize (looks like a full-screen clock, supports any aspect ratio display, even vertical)
+- Remembers last position/size
 - Popup is "always-on-top" when activated
 
 ## Usage
