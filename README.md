@@ -9,7 +9,8 @@
 * [Troubleshooting](#troubleshooting)
 * [Development](#dev)
 
-![2025-05-25--11-49-39--556](https://github.com/user-attachments/assets/26adb548-0c6e-4587-9741-542b4a4902b0)
+<img width=600 src=https://github.com/user-attachments/assets/0340d295-7dd8-4a88-8f81-2eb0390d5066 />
+
 
 ## Why
 
