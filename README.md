@@ -53,7 +53,7 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 
 ## Troubleshooting
 
-- If something doesn't work, make sure .NET 8 Desktop Runtime is installed and that your Windows 11 installation is up to date.
+- If something doesn't work, make sure [.NET Desktop Runtime 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) is installed and that your Windows 11 installation is up to date.
 - If you have any problems, let me know [by creating issue](https://github.com/alexchexes/Win11Seconds/issues)
 
 # Dev
