@@ -18,11 +18,11 @@
 
 In Windows 11, Microsoft removed a very simple but useful feature: clicking on the system clock in the tray no longer shows the clock with seconds ticking in real time. Nobody has any idea why they would do that (except, perhaps, their ignorance) but people really miss it:
 
-* https://answers.microsoft.com/en-us/windows/forum/all/how-can-i-show-time-with-seconds-when-clicking-on/5702b0c4-8009-4332-80f8-b636a2279ab8
-* https://answers.microsoft.com/en-us/windows/forum/all/how-to-show-time-with-seconds-when-clicking-on-the/ceef59eb-cf30-4690-8615-9bf32cae40ec
-* https://www.reddit.com/r/Windows11/comments/1bt6qs2/i_know_this_is_dumb_but_does_anyone_else_miss_the/
-* https://www.reddit.com/r/Windows11/comments/1hrcj4i/i_just_want_a_clock_that_displays_seconds_that/
-* https://www.reddit.com/r/Windows11/comments/1g3ps74/is_there_any_way_to_get_the_clock_with_seconds/
+* [Microsoft forum (1)](https://answers.microsoft.com/en-us/windows/forum/all/how-can-i-show-time-with-seconds-when-clicking-on/5702b0c4-8009-4332-80f8-b636a2279ab8)
+* [Microsoft forum (2)](https://answers.microsoft.com/en-us/windows/forum/all/how-to-show-time-with-seconds-when-clicking-on-the/ceef59eb-cf30-4690-8615-9bf32cae40ec)
+* [Reddit (1)](https://www.reddit.com/r/Windows11/comments/1bt6qs2/i_know_this_is_dumb_but_does_anyone_else_miss_the/)
+* [Reddit (2)](https://www.reddit.com/r/Windows11/comments/1hrcj4i/i_just_want_a_clock_that_displays_seconds_that/)
+* [Reddit (3)](https://www.reddit.com/r/Windows11/comments/1g3ps74/is_there_any_way_to_get_the_clock_with_seconds/)
 
 Yes, there is [a way](https://www.elevenforum.com/t/turn-on-or-off-show-seconds-in-system-tray-clock-in-windows-11.10591/) to add seconds to the Windows clock right in the system tray (so you always see them, even without clicking), but as you can see from the discussions above, not everyone wants that — seconds are usually needed in a specific moment, not always. Plus, [it may be buggy](https://answers.microsoft.com/en-us/windows/forum/all/showing-seconds-on-clock-caused-problems-is-there/b2c5d253-8502-4707-80c5-46790702637c) or [resource-greedy](https://www.reddit.com/r/Windows11/comments/1gwk0yv/how_much_power_can_this_possibly_take_up/).
 
