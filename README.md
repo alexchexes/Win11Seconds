@@ -48,7 +48,7 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 * `%userprofile%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup` (Win+R → `shell:startup`) — for your user only
 * `%ProgramData%\Microsoft\Windows\Start Menu\Programs\Startup` (Win+R → `shell:common startup`) — for all users
 
-P.S. If you don't trust pre-built .exe files, you can compile your own — see the [Dev](#dev) section below.
+_P.S. If you don't trust pre-built .exe files, you can compile your own — see the [Dev](#dev) section below._
 
 ## Interaction
 
