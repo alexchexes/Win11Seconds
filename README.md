@@ -19,16 +19,16 @@
 Microsoft removed a very simple but useful feature from Windows 11: clicking on the system clock in the tray no longer shows the clock with seconds ticking in real time. Nobody has any idea why they would do that (except, perhaps, their ignorance) but people really miss it:
 
 * https://answers.microsoft.com/en-us/windows/forum/all/how-can-i-show-time-with-seconds-when-clicking-on/5702b0c4-8009-4332-80f8-b636a2279ab8
-
+* https://answers.microsoft.com/en-us/windows/forum/all/how-to-show-time-with-seconds-when-clicking-on-the/ceef59eb-cf30-4690-8615-9bf32cae40ec
 * https://www.reddit.com/r/Windows11/comments/1bt6qs2/i_know_this_is_dumb_but_does_anyone_else_miss_the/
 
-Yes, there is [a way](https://www.elevenforum.com/t/turn-on-or-off-show-seconds-in-system-tray-clock-in-windows-11.10591/) to add seconds to the Windows clock right in the system tray (so you always see them, even without clicking), but as you can see from the discussions above, not everyone wants that — seconds are usually needed in a specific moment, not always.
+Yes, there is [a way](https://www.elevenforum.com/t/turn-on-or-off-show-seconds-in-system-tray-clock-in-windows-11.10591/) to add seconds to the Windows clock right in the system tray (so you always see them, even without clicking), but as you can see from the discussions above, not everyone wants that — seconds are usually needed in a specific moment, not always. Plus, [it may be buggy or resource-greedy](https://answers.microsoft.com/en-us/windows/forum/all/showing-seconds-on-clock-caused-problems-is-there/b2c5d253-8502-4707-80c5-46790702637c).
 
 Hence, this simple utility brings back the ability to “click in tray and see seconds” to your Windows 11 — without bloating you with features you likely don’t need, which more advanced programs usually include.
 
 ## Features
 
-- Extremely lightweight: **200 KB** single `.exe` file
+- Extremely lightweight: **≈200 KB** single `.exe` file
 - Minimal CPU & memory footprint: uses **8 MB of RAM** and nearly zero CPU while in the background
 - Click the tray icon and see the `HH:mm:ss` ticking in real time
 - Dark/light theme auto-detect
