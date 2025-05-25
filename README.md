@@ -8,6 +8,7 @@
 * [Interaction](#interaction)
 * [Troubleshooting](#troubleshooting)
 * [Development](#dev)
+* [Buy me a coffee](#buy-me-a-coffee)
 
 <img width=600 src=https://github.com/user-attachments/assets/0340d295-7dd8-4a88-8f81-2eb0390d5066 />
 
@@ -70,3 +71,11 @@ dotnet run
 # to create .exe file
 dotnet publish -c Release -r win-x64 --self-contained=false /p:PublishSingleFile=true
 ```
+
+# Buy me a coffee
+
+<a href="https://ko-fi.com/alexchexes">
+  <img src=https://github.com/user-attachments/assets/59c35381-4cb5-472a-a730-15dbe76862eb width=100px />
+</a>
+
+https://ko-fi.com/alexchexes
