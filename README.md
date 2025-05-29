@@ -44,11 +44,12 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 2. Download the `Win11Seconds.exe` file [from the latest release](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).  
 3. Run it. Sit tight. The icon appears in your Windows 11 tray in a second. Now click it to see the seconds!
 
+> If you see the `Windows protected your PC` warning, that's okay (see the [Dev](#dev) section below to compile your own .exe if you don't trust this file). Just click **_More info_** > **_Run anyway_**.  
+> Or you can **_right-click the .exe_** > **_Properties (General)_** > **_Unblock_**.
+
 Optionally, to make the program auto-start with Windows, add a shortcut to the file in one of these folders:
 * `%userprofile%\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup` (Win+R → `shell:startup`) — for your user only
 * `%ProgramData%\Microsoft\Windows\Start Menu\Programs\Startup` (Win+R → `shell:common startup`) — for all users
-
-_P.S. If you don't trust pre-built .exe files, you can compile your own — see the [Dev](#dev) section below._
 
 ## Interaction
 
