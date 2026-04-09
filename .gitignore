@@ -1,3 +1,5 @@
+tmp/
+
 # Build output directories
 bin/
 obj/
@@ -10,9 +12,6 @@ obj/
 
 # Rider
 .idea/
-
-# VS Code
-.vscode/
 
 # OS-generated files
 .DS_Store

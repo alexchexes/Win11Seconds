@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Launch Win11Seconds",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build Win11Seconds",
+            "program": "${workspaceFolder}/src/Win11Seconds/bin/Debug/net8.0-windows/Win11Seconds.exe",
+            "cwd": "${workspaceFolder}/src/Win11Seconds",
+            "stopAtEntry": false,
+            "console": "internalConsole"
+        }
+    ]
+}

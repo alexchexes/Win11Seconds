@@ -42,12 +42,12 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 
 ## Usage
 
-1. Download the `Win11Seconds.exe` file from the latest [release](https://github.com/alexchexes/Win11Seconds/releases). You can use [this link](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).  
+1. Download the `Win11Seconds.exe` file from the latest [release](https://github.com/alexchexes/Win11Seconds/releases). You can use [this link](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).
 2. If you don't have [.NET Desktop Runtime 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) installed, when you first run the downloaded .exe file, Windows will prompt you to download and install .NET Runtime from microsoft.com. Follow the link the Windows dialogue shows you to proceed, and complete the .NET installation. It's just 50 MB.
 3. Open the `Win11Seconds.exe`.
 4. Sit tight. The icon appears in your Windows 11 tray in a second. Now you can... Click it to see the seconds!
 
-> If you see the `Windows protected your PC` warning, that's okay (see the [Dev](#dev) section below to compile your own .exe if you don't trust this file). Just click **_More info_** > **_Run anyway_**.  
+> If you see the `Windows protected your PC` warning, that's okay (see the [Dev](#dev) section below to compile your own .exe if you don't trust this file). Just click **_More info_** > **_Run anyway_**.
 > Or you can **_right-click the .exe_** > **_Properties (General)_** > **_Unblock_**.
 
 Optionally, to make the program auto-start with Windows, add a shortcut to the file in one of these folders:
@@ -56,9 +56,9 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 
 ## Interaction
 
-- **Left-click tray icon**: Show/hide popup clock (with seconds)  
-- **Double-click popup clock**: Maximize/Unmaximize  
-- **Right-click tray icon or popup clock**: Show context menu  
+- **Left-click tray icon**: Show/hide popup clock (with seconds)
+- **Double-click popup clock**: Maximize/Unmaximize
+- **Right-click tray icon or popup clock**: Show context menu
 - **Hover over the top right corner of the popup clock**: Show "Close" button
 
 ## Troubleshooting
@@ -68,19 +68,57 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 
 # Dev
 
-- Install the [.NET SDK](https://dotnet.microsoft.com/en-us/download) (version 8 LTS)
+- Install the [.NET SDK 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- Open the repo root in VS Code or Visual Studio
+- Main app project: `src/Win11Seconds/Win11Seconds.csproj`
+- Test project: `tests/Win11Seconds.Tests/Win11Seconds.Tests.csproj`
+- VS Code debug config is checked in under `.vscode/`
 
 ```powershell
 # clone repo and navigate to it
 
-# to start program
-dotnet run
+# restore/build solution
+dotnet build Win11Seconds.sln
 
-# to create .exe file
-dotnet publish -c Release -r win-x64 --self-contained=false /p:PublishSingleFile=true
+# run the app from the project
+dotnet run --project src/Win11Seconds/Win11Seconds.csproj
+
+# run tests
+dotnet test Win11Seconds.sln
+
+# verify formatting/analyzers
+dotnet format Win11Seconds.sln --verify-no-changes
+
+# apply formatting fixes
+dotnet format Win11Seconds.sln
+
+# create Release build output
+dotnet build src/Win11Seconds/Win11Seconds.csproj -c Release
+
+# publish the single-file .exe used for releases
+dotnet publish src/Win11Seconds/Win11Seconds.csproj -c Release -r win-x64 --self-contained=false /p:PublishSingleFile=true
 ```
 
-# Buy me a coffee
+Debug build artifacts go to:
+
+- `src/Win11Seconds/bin/Debug/net8.0-windows/`
+
+Release build artifacts:
+
+- `src/Win11Seconds/bin/Release/net8.0-windows/win-x64/`
+
+Published single-file release artifacts:
+
+- `src/Win11Seconds/bin/Release/net8.0-windows/win-x64/publish/`
+
+Notes:
+
+- `dotnet build` and `dotnet test` already run Roslyn analyzers configured via `Directory.Build.props` and `.editorconfig`
+- In VS Code, use `F5` or the `Launch Win11Seconds` configuration to debug the app
+- The Release configuration disables debug symbols; Debug keeps them for stepping and breakpoints
+- If you hit path or SDK issues in VS Code after installing .NET, fully restart VS Code, not just `Reload Window`
+
+# Buy me a coffee?
 
 <a href="https://ko-fi.com/alexchexes">
   <img src=https://github.com/user-attachments/assets/59c35381-4cb5-472a-a730-15dbe76862eb width=100px />
