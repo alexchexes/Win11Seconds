@@ -8,6 +8,9 @@ sealed class BorderlessResizableForm : Form
     private const int WM_SIZING = 0x214;
 
     private const int HTCLIENT = 1;
+    private const int HTTOP = 12;
+    private const int HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14;
     private const int HTLEFT = 10;
     private const int HTRIGHT = 11;
     private const int HTBOTTOM = 15;
@@ -17,8 +20,6 @@ sealed class BorderlessResizableForm : Form
     private const int ResizeBorderThickness = 6;
     private const int WS_THICKFRAME = 0x00040000;
     private const int WS_EX_COMPOSITED = 0x02000000;
-    private const float AspectRatio = 200f / 80f;
-
     public BorderlessResizableForm()
     {
         FormBorderStyle = FormBorderStyle.None;
@@ -42,7 +43,20 @@ sealed class BorderlessResizableForm : Form
             var cursorPosition = PointToClient(Cursor.Position);
             bool left = cursorPosition.X < ResizeBorderThickness;
             bool right = cursorPosition.X >= ClientSize.Width - ResizeBorderThickness;
+            bool top = cursorPosition.Y < ResizeBorderThickness;
             bool bottom = cursorPosition.Y >= ClientSize.Height - ResizeBorderThickness;
+
+            if (left && top)
+            {
+                m.Result = (IntPtr)HTTOPLEFT;
+                return;
+            }
+
+            if (right && top)
+            {
+                m.Result = (IntPtr)HTTOPRIGHT;
+                return;
+            }
 
             if (left && bottom)
             {
@@ -68,6 +82,12 @@ sealed class BorderlessResizableForm : Form
                 return;
             }
 
+            if (top)
+            {
+                m.Result = (IntPtr)HTTOP;
+                return;
+            }
+
             if (bottom)
             {
                 m.Result = (IntPtr)HTBOTTOM;
@@ -81,11 +101,23 @@ sealed class BorderlessResizableForm : Form
         if (m.Msg == WM_SIZING)
         {
             var rect = Marshal.PtrToStructure<RECT>(m.LParam);
-            int width = rect.right - rect.left;
-            int height = (int)(width / AspectRatio);
-            rect.bottom = rect.top + height;
-            Marshal.StructureToPtr(rect, m.LParam, true);
-            m.Result = IntPtr.Zero;
+            var proposedBounds = Rectangle.FromLTRB(rect.left, rect.top, rect.right, rect.bottom);
+            if (Enum.IsDefined(typeof(ResizeDirection), m.WParam.ToInt32()))
+            {
+                var constrainedBounds = ClockLayout.CalculateConstrainedBounds(
+                    proposedBounds,
+                    (ResizeDirection)m.WParam.ToInt32(),
+                    ClockLayout.DefaultAspectRatio,
+                    MinimumSize);
+
+                rect.left = constrainedBounds.Left;
+                rect.top = constrainedBounds.Top;
+                rect.right = constrainedBounds.Right;
+                rect.bottom = constrainedBounds.Bottom;
+            }
+
+            Marshal.StructureToPtr(rect, m.LParam, fDeleteOld: false);
+            m.Result = (IntPtr)1;
             return;
         }
 

@@ -131,4 +131,64 @@ public class ClockLayoutTests
                 Is.Null);
         });
     }
+
+    [Test]
+    public void CalculateConstrainedBounds_ForBottomResize_KeepsTopFixedAndCentersWidth()
+    {
+        Rectangle bounds = ClockLayout.CalculateConstrainedBounds(
+            new Rectangle(100, 50, 200, 120),
+            ResizeDirection.Bottom,
+            ClockLayout.DefaultAspectRatio,
+            new Size(120, 48));
+
+        Assert.That(bounds, Is.EqualTo(new Rectangle(50, 50, 300, 120)));
+    }
+
+    [Test]
+    public void CalculateConstrainedBounds_ForTopResize_KeepsBottomFixedAndCentersWidth()
+    {
+        Rectangle bounds = ClockLayout.CalculateConstrainedBounds(
+            new Rectangle(100, 20, 200, 120),
+            ResizeDirection.Top,
+            ClockLayout.DefaultAspectRatio,
+            new Size(120, 48));
+
+        Assert.That(bounds, Is.EqualTo(new Rectangle(50, 20, 300, 120)));
+    }
+
+    [Test]
+    public void CalculateConstrainedBounds_ForLeftResize_KeepsRightFixedAndCentersHeight()
+    {
+        Rectangle bounds = ClockLayout.CalculateConstrainedBounds(
+            new Rectangle(80, 50, 220, 80),
+            ResizeDirection.Left,
+            ClockLayout.DefaultAspectRatio,
+            new Size(120, 48));
+
+        Assert.That(bounds, Is.EqualTo(new Rectangle(80, 46, 220, 88)));
+    }
+
+    [Test]
+    public void CalculateConstrainedBounds_ForCornerResize_KeepsOppositeCornerAnchored()
+    {
+        Rectangle bounds = ClockLayout.CalculateConstrainedBounds(
+            Rectangle.FromLTRB(50, 20, 300, 130),
+            ResizeDirection.TopLeft,
+            ClockLayout.DefaultAspectRatio,
+            new Size(120, 48));
+
+        Assert.That(bounds, Is.EqualTo(Rectangle.FromLTRB(50, 30, 300, 130)));
+    }
+
+    [Test]
+    public void CalculateConstrainedBounds_ClampsToMinimumSize()
+    {
+        Rectangle bounds = ClockLayout.CalculateConstrainedBounds(
+            new Rectangle(100, 50, 10, 10),
+            ResizeDirection.Bottom,
+            ClockLayout.DefaultAspectRatio,
+            new Size(120, 48));
+
+        Assert.That(bounds, Is.EqualTo(new Rectangle(45, 50, 120, 48)));
+    }
 }

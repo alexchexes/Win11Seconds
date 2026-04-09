@@ -12,6 +12,7 @@ sealed class TrayContext : ApplicationContext
     private readonly BorderlessResizableForm clockForm;
     private readonly SmoothLabel timeLabel;
     private readonly Label closeLabel;
+    private Font timeLabelFont;
     private readonly System.Windows.Forms.Timer timer;
     private readonly System.Windows.Forms.Timer closeHideTimer;
     private readonly ContextMenuStrip menu;
@@ -30,9 +31,10 @@ sealed class TrayContext : ApplicationContext
         appearance = appearanceMonitor.Current;
         appearanceMonitor.Changed += OnAppearanceChanged;
 
+        timeLabelFont = CreateTimeLabelFont(24f);
         tray = CreateTrayIcon();
         clockForm = CreateClockForm();
-        timeLabel = CreateTimeLabel();
+        timeLabel = CreateTimeLabel(timeLabelFont);
         closeLabel = CreateCloseLabel();
 
         clockForm.Controls.Add(timeLabel);
@@ -81,6 +83,7 @@ sealed class TrayContext : ApplicationContext
             timeLabel.Dispose();
             closeLabel.Dispose();
             clockForm.Dispose();
+            timeLabelFont.Dispose();
         }
 
         disposed = true;
@@ -121,15 +124,20 @@ sealed class TrayContext : ApplicationContext
         return form;
     }
 
-    private static SmoothLabel CreateTimeLabel()
+    private static SmoothLabel CreateTimeLabel(Font font)
     {
         return new SmoothLabel
         {
             Dock = DockStyle.Fill,
-            Font = new Font("Segoe UI", 24),
+            Font = font,
             TextAlign = ContentAlignment.MiddleCenter,
             UseCompatibleTextRendering = true
         };
+    }
+
+    private static Font CreateTimeLabelFont(float size)
+    {
+        return new Font("Segoe UI", size, FontStyle.Regular);
     }
 
     private Label CreateCloseLabel()
@@ -137,7 +145,7 @@ sealed class TrayContext : ApplicationContext
         return new Label
         {
             Text = "✕",
-            Font = new Font(Control.DefaultFont.FontFamily, Control.DefaultFont.Size),
+            Font = Control.DefaultFont,
             TextAlign = ContentAlignment.MiddleCenter,
             Size = new Size(24, 24),
             Location = ClockLayout.CalculateCloseButtonLocation(clockForm.ClientSize, new Size(24, 24)),
@@ -322,8 +330,12 @@ sealed class TrayContext : ApplicationContext
         float? newSize = ClockLayout.CalculateFontSize(clockForm.ClientSize, measurement, testFont.Size);
         if (newSize.HasValue && Math.Abs(lastAppliedFontSize - newSize.Value) >= 0.25f)
         {
-            timeLabel.Font = new Font("Segoe UI", newSize.Value, FontStyle.Regular);
+            Font nextFont = CreateTimeLabelFont(newSize.Value);
+            Font previousFont = timeLabelFont;
+            timeLabelFont = nextFont;
+            timeLabel.Font = nextFont;
             lastAppliedFontSize = newSize.Value;
+            previousFont.Dispose();
         }
 
         closeLabel.Location = ClockLayout.CalculateCloseButtonLocation(clockForm.ClientSize, closeLabel.Size);
