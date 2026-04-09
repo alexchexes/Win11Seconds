@@ -10,9 +10,11 @@
 * [Development](#dev)
 * [Buy me a coffee](#buy-me-a-coffee)
 
-<img width=600 src=https://github.com/user-attachments/assets/0340d295-7dd8-4a88-8f81-2eb0390d5066 />
+<img width=600 alt="Animated demo of Win11Seconds showing the tray click and live seconds popup" src="./assets/win11seconds-demo.gif" />
 
-<img width=600 src=https://github.com/user-attachments/assets/e60e5e9c-dbc2-4a94-8e75-4883247cb4fa />
+<img width=600 alt="Win11Seconds popup clock shown on a dark desktop background" src=https://github.com/user-attachments/assets/0340d295-7dd8-4a88-8f81-2eb0390d5066 />
+
+<img width=600 alt="Win11Seconds popup clock shown on a light desktop background" src=https://github.com/user-attachments/assets/e60e5e9c-dbc2-4a94-8e75-4883247cb4fa />
 
 ## Why
 
@@ -40,9 +42,10 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 
 ## Usage
 
-1. Make sure you have the [.NET Desktop Runtime 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) installed (you can check by running `dotnet --list-runtimes` in CMD — must be version 8.x.x, not 6, 7, or 9). If not, install it — it's just a 50 MB download and many other apps use it.
-2. Download the `Win11Seconds.exe` file [from the latest release](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).  
-3. Run it. Sit tight. The icon appears in your Windows 11 tray in a second. Now click it to see the seconds!
+1. Download the `Win11Seconds.exe` file from the latest [release](https://github.com/alexchexes/Win11Seconds/releases). You can use [this link](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).  
+2. If you don't have [.NET Desktop Runtime 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) installed, when you first run the downloaded .exe file, Windows will prompt you to download and install .NET Runtime from microsoft.com. Follow the link the Windows dialogue shows you to proceed, and complete the .NET installation. It's just 50 MB.
+3. Open the `Win11Seconds.exe`.
+4. Sit tight. The icon appears in your Windows 11 tray in a second. Now you can... Click it to see the seconds!
 
 > If you see the `Windows protected your PC` warning, that's okay (see the [Dev](#dev) section below to compile your own .exe if you don't trust this file). Just click **_More info_** > **_Run anyway_**.  
 > Or you can **_right-click the .exe_** > **_Properties (General)_** > **_Unblock_**.
