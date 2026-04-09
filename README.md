@@ -42,9 +42,11 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 
 ## Usage
 
-1. Download the `Win11Seconds.exe` file from the latest [release](https://github.com/alexchexes/Win11Seconds/releases). You can use [this link](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe).
+1. Download the latest build from [releases](https://github.com/alexchexes/Win11Seconds/releases):
+   `Win11Seconds.exe` for regular x64 Windows, or `Win11Seconds-arm64.exe` for Windows on Arm.
+   Direct links: [x64](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds.exe), [ARM64](https://github.com/alexchexes/Win11Seconds/releases/latest/download/Win11Seconds-arm64.exe).
 2. If you don't have [.NET Desktop Runtime 8](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) installed, when you first run the downloaded .exe file, Windows will prompt you to download and install .NET Runtime from microsoft.com. Follow the link the Windows dialogue shows you to proceed, and complete the .NET installation. It's just 50 MB.
-3. Open the `Win11Seconds.exe`.
+3. Open the downloaded `.exe`.
 4. Sit tight. The icon appears in your Windows 11 tray in a second. Now you can... Click it to see the seconds!
 
 > If you see the `Windows protected your PC` warning, that's okay (see the [Dev](#dev) section below to compile your own .exe if you don't trust this file). Just click **_More info_** > **_Run anyway_**.
@@ -73,6 +75,7 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 - Main app project: `src/Win11Seconds/Win11Seconds.csproj`
 - Test project: `tests/Win11Seconds.Tests/Win11Seconds.Tests.csproj`
 - VS Code debug config is checked in under `.vscode/`
+- Release version metadata for the `.exe` lives in `src/Win11Seconds/Win11Seconds.csproj` via `<Version>`
 
 ```powershell
 # clone repo and navigate to it
@@ -95,8 +98,14 @@ dotnet format Win11Seconds.sln
 # create Release build output
 dotnet build src/Win11Seconds/Win11Seconds.csproj -c Release
 
-# publish the single-file .exe used for releases
+# publish the single-file x64 .exe used for releases
 dotnet publish src/Win11Seconds/Win11Seconds.csproj -c Release -r win-x64 --self-contained=false /p:PublishSingleFile=true
+
+# publish the native ARM64 .exe for modern Windows on Arm devices
+dotnet publish src/Win11Seconds/Win11Seconds.csproj -c Release -r win-arm64 --self-contained=false /p:PublishSingleFile=true
+
+# make a release-friendly ARM filename copy
+Copy-Item src/Win11Seconds/bin/Release/net8.0-windows/win-arm64/publish/Win11Seconds.exe src/Win11Seconds/bin/Release/net8.0-windows/win-arm64/publish/Win11Seconds-arm64.exe -Force
 ```
 
 Debug build artifacts go to:
@@ -106,16 +115,20 @@ Debug build artifacts go to:
 Release build artifacts:
 
 - `src/Win11Seconds/bin/Release/net8.0-windows/win-x64/`
+- `src/Win11Seconds/bin/Release/net8.0-windows/win-arm64/`
 
 Published single-file release artifacts:
 
 - `src/Win11Seconds/bin/Release/net8.0-windows/win-x64/publish/`
+- `src/Win11Seconds/bin/Release/net8.0-windows/win-arm64/publish/`
 
 Notes:
 
 - `dotnet build` and `dotnet test` already run Roslyn analyzers configured via `Directory.Build.props` and `.editorconfig`
 - In VS Code, use `F5` or the `Launch Win11Seconds` configuration to debug the app
 - The Release configuration disables debug symbols; Debug keeps them for stepping and breakpoints
+- Before cutting a release, bump `<Version>` in `src/Win11Seconds/Win11Seconds.csproj`; the published `.exe` file version follows it automatically
+- For GitHub releases, keep the asset names as `Win11Seconds.exe` for x64 and `Win11Seconds-arm64.exe` for ARM64 so the direct links above stay valid
 - If you hit path or SDK issues in VS Code after installing .NET, fully restart VS Code, not just `Reload Window`
 
 # Buy me a coffee?
