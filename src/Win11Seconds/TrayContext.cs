@@ -10,8 +10,6 @@ sealed class TrayContext : ApplicationContext
     private readonly AppearanceSettingsMonitor appearanceMonitor;
     private readonly NotifyIcon tray;
     private readonly BorderlessResizableForm clockForm;
-    private readonly SmoothLabel timeLabel;
-    private readonly Label closeLabel;
     private Font timeLabelFont;
     private readonly System.Windows.Forms.Timer timer;
     private readonly System.Windows.Forms.Timer closeHideTimer;
@@ -21,6 +19,8 @@ sealed class TrayContext : ApplicationContext
     private Point? lastLocation;
     private bool firstTick;
     private bool disposed;
+    private bool isClockActive;
+    private bool isSystemBackdropEnabled;
     private float lastAppliedFontSize = 24f;
 
     public TrayContext()
@@ -34,12 +34,6 @@ sealed class TrayContext : ApplicationContext
         timeLabelFont = CreateTimeLabelFont(24f);
         tray = CreateTrayIcon();
         clockForm = CreateClockForm();
-        timeLabel = CreateTimeLabel(timeLabelFont);
-        closeLabel = CreateCloseLabel();
-
-        clockForm.Controls.Add(timeLabel);
-        clockForm.Controls.Add(closeLabel);
-        closeLabel.BringToFront();
 
         SetupFormEvents();
 
@@ -80,8 +74,6 @@ sealed class TrayContext : ApplicationContext
             tray.Icon?.Dispose();
             tray.Dispose();
 
-            timeLabel.Dispose();
-            closeLabel.Dispose();
             clockForm.Dispose();
             timeLabelFont.Dispose();
         }
@@ -117,22 +109,12 @@ sealed class TrayContext : ApplicationContext
             StartPosition = FormStartPosition.Manual,
             TopMost = true,
             ClientSize = new Size(200, 80),
-            MinimumSize = new Size(120, 48)
+            MinimumSize = new Size(120, 48),
+            DisplayFont = timeLabelFont
         };
 
         form.HandleCreated += OnClockFormHandleCreated;
         return form;
-    }
-
-    private static SmoothLabel CreateTimeLabel(Font font)
-    {
-        return new SmoothLabel
-        {
-            Dock = DockStyle.Fill,
-            Font = font,
-            TextAlign = ContentAlignment.MiddleCenter,
-            UseCompatibleTextRendering = true
-        };
     }
 
     private static Font CreateTimeLabelFont(float size)
@@ -140,36 +122,17 @@ sealed class TrayContext : ApplicationContext
         return new Font("Segoe UI", size, FontStyle.Regular);
     }
 
-    private Label CreateCloseLabel()
-    {
-        return new Label
-        {
-            Text = "✕",
-            Font = Control.DefaultFont,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Size = new Size(24, 24),
-            Location = ClockLayout.CalculateCloseButtonLocation(clockForm.ClientSize, new Size(24, 24)),
-            Visible = false,
-            Cursor = Cursors.Hand
-        };
-    }
-
     private void SetupFormEvents()
     {
         clockForm.Resize += OnClockFormResize;
         clockForm.FormClosing += OnClockFormClosing;
         clockForm.Move += OnClockFormMove;
+        clockForm.Activated += OnClockFormActivationChanged;
+        clockForm.Deactivate += OnClockFormActivationChanged;
         clockForm.MouseDown += DragWindow;
         clockForm.MouseDown += OnPopupMouseDown;
         clockForm.MouseMove += OnPopupMouseMove;
         clockForm.MouseLeave += OnClockFormMouseLeave;
-
-        timeLabel.MouseDown += DragWindow;
-        timeLabel.MouseDown += OnPopupMouseDown;
-        timeLabel.MouseMove += OnPopupMouseMove;
-
-        closeLabel.Click += OnCloseLabelClick;
-        closeLabel.MouseMove += OnPopupMouseMove;
     }
 
     private ContextMenuStrip CreateContextMenu()
@@ -216,18 +179,7 @@ sealed class TrayContext : ApplicationContext
     {
         appearance = nextAppearance;
         UpdateTrayIcon();
-
-        clockForm.BackColor = appearance.PopupBackgroundColor;
-        timeLabel.BackColor = appearance.PopupBackgroundColor;
-        closeLabel.BackColor = appearance.PopupBackgroundColor;
-
-        timeLabel.ForeColor = appearance.PopupForegroundColor;
-        closeLabel.ForeColor = appearance.PopupForegroundColor;
-
-        if (clockForm.IsHandleCreated)
-        {
-            ApplyWindowChrome();
-        }
+        UpdateWindowAppearance(forceFrameRefresh: true);
     }
 
     private void UpdateTrayIcon()
@@ -244,10 +196,59 @@ sealed class TrayContext : ApplicationContext
         previousIcon?.Dispose();
     }
 
-    private void ApplyWindowChrome()
+    private bool ApplyWindowChrome()
     {
+        bool shouldEnableBackdrop = appearance.IsTransparencyEffectsEnabled && isClockActive;
         NativeMethods.TrySetRoundedCorners(clockForm.Handle);
-        NativeMethods.TrySetCaptionColor(clockForm.Handle, clockForm.BackColor);
+        NativeMethods.TrySetImmersiveDarkMode(clockForm.Handle, appearance.UseImmersiveDarkMode);
+        NativeMethods.TryHideBorder(clockForm.Handle);
+
+        bool useSystemBackdrop = shouldEnableBackdrop
+            && NativeMethods.TrySetSystemBackdropType(
+                clockForm.Handle,
+                NativeMethods.DwmSystemBackdropType.TransientWindow);
+
+        if (!useSystemBackdrop)
+        {
+            NativeMethods.TrySetSystemBackdropType(
+                clockForm.Handle,
+                NativeMethods.DwmSystemBackdropType.None);
+        }
+
+        NativeMethods.TryExtendFrameIntoClientArea(clockForm.Handle, useSystemBackdrop);
+        clockForm.UseSystemBackdropBackground = useSystemBackdrop;
+        if (useSystemBackdrop)
+        {
+            NativeMethods.TryResetCaptionColor(clockForm.Handle);
+        }
+        else
+        {
+            NativeMethods.TrySetCaptionColor(clockForm.Handle, GetPopupWindowBackgroundColor(useSystemBackdrop));
+        }
+
+        return useSystemBackdrop;
+    }
+
+    private void ApplyPopupColors(bool useSystemBackdrop)
+    {
+        clockForm.BackColor = GetPopupWindowBackgroundColor(useSystemBackdrop);
+        clockForm.BackdropOverlayColor = useSystemBackdrop
+            ? appearance.PopupActiveBackdropOverlayColor
+            : Color.Empty;
+        clockForm.DisplayForeColor = appearance.PopupForegroundColor;
+        clockForm.CloseButtonForeColor = appearance.PopupForegroundColor;
+    }
+
+    private Color GetPopupWindowBackgroundColor(bool useSystemBackdrop)
+    {
+        if (useSystemBackdrop)
+        {
+            return appearance.PopupSolidBackgroundColor;
+        }
+
+        return appearance.IsTransparencyEffectsEnabled && !isClockActive
+            ? appearance.PopupInactiveBackgroundColor
+            : appearance.PopupSolidBackgroundColor;
     }
 
     private void StartSynchronizedTimer()
@@ -283,8 +284,8 @@ sealed class TrayContext : ApplicationContext
 
     private void ShowClock()
     {
-        timeLabel.Text = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
-        closeLabel.BringToFront();
+        clockForm.DisplayText = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        clockForm.CloseButtonVisible = false;
 
         if (
             lastLocation.HasValue
@@ -307,6 +308,11 @@ sealed class TrayContext : ApplicationContext
         }
 
         clockForm.Show();
+        clockForm.BringToFront();
+        _ = NativeMethods.SetForegroundWindow(clockForm.Handle);
+        clockForm.Activate();
+        isClockActive = true;
+        UpdateWindowAppearance(forceFrameRefresh: false);
         StartSynchronizedTimer();
         closeHideTimer.Start();
     }
@@ -315,13 +321,13 @@ sealed class TrayContext : ApplicationContext
     {
         timer.Stop();
         closeHideTimer.Stop();
-        closeLabel.Visible = false;
+        clockForm.CloseButtonVisible = false;
         clockForm.Hide();
     }
 
-    private void AutoResizeFontAndCloseLabel()
+    private void AutoResizeClockFont()
     {
-        string sampleText = string.IsNullOrWhiteSpace(timeLabel.Text) ? "00:00:00" : timeLabel.Text;
+        string sampleText = string.IsNullOrWhiteSpace(clockForm.DisplayText) ? "00:00:00" : clockForm.DisplayText;
         int measurementFontSize = Math.Max(1, clockForm.ClientSize.Height - ClockLayout.FontPadding * 2);
 
         using var graphics = clockForm.CreateGraphics();
@@ -333,12 +339,10 @@ sealed class TrayContext : ApplicationContext
             Font nextFont = CreateTimeLabelFont(newSize.Value);
             Font previousFont = timeLabelFont;
             timeLabelFont = nextFont;
-            timeLabel.Font = nextFont;
+            clockForm.DisplayFont = nextFont;
             lastAppliedFontSize = newSize.Value;
             previousFont.Dispose();
         }
-
-        closeLabel.Location = ClockLayout.CalculateCloseButtonLocation(clockForm.ClientSize, closeLabel.Size);
     }
 
     private static void OpenRepositoryUrl()
@@ -357,6 +361,12 @@ sealed class TrayContext : ApplicationContext
             return;
         }
 
+        var clickPoint = clockForm.PointToClient(Cursor.Position);
+        if (clockForm.IsResizeBorderHit(clickPoint) || clockForm.IsCloseButtonHit(clickPoint))
+        {
+            return;
+        }
+
         NativeMethods.ReleaseCapture();
         NativeMethods.SendMessage(
             clockForm.Handle,
@@ -367,7 +377,13 @@ sealed class TrayContext : ApplicationContext
 
     private void Timer_Tick(object? sender, EventArgs e)
     {
-        timeLabel.Text = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        clockForm.DisplayText = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
+        if (clockForm.Visible)
+        {
+            clockForm.Invalidate();
+            clockForm.Update();
+        }
+
         if (firstTick)
         {
             firstTick = false;
@@ -377,9 +393,10 @@ sealed class TrayContext : ApplicationContext
 
     private void CloseHideTimer_Tick(object? sender, EventArgs e)
     {
-        if (closeLabel.Visible && !clockForm.Bounds.Contains(Cursor.Position))
+        if (clockForm.CloseButtonVisible && !clockForm.Bounds.Contains(Cursor.Position))
         {
-            closeLabel.Visible = false;
+            clockForm.CloseButtonVisible = false;
+            InvalidateClockBackdrop();
         }
     }
 
@@ -393,12 +410,13 @@ sealed class TrayContext : ApplicationContext
 
     private void OnClockFormHandleCreated(object? sender, EventArgs e)
     {
-        ApplyWindowChrome();
+        UpdateWindowAppearance(forceFrameRefresh: true);
     }
 
     private void OnClockFormResize(object? sender, EventArgs e)
     {
-        AutoResizeFontAndCloseLabel();
+        AutoResizeClockFont();
+        InvalidateClockBackdrop();
     }
 
     private void OnClockFormClosing(object? sender, FormClosingEventArgs e)
@@ -413,27 +431,33 @@ sealed class TrayContext : ApplicationContext
     private void OnClockFormMove(object? sender, EventArgs e)
     {
         lastLocation = clockForm.Location;
-    }
-
-    private void OnCloseLabelClick(object? sender, EventArgs e)
-    {
-        HideClock();
+        InvalidateClockBackdrop();
     }
 
     private void OnClockFormMouseLeave(object? sender, EventArgs e)
     {
-        closeLabel.Visible = false;
+        if (clockForm.CloseButtonVisible)
+        {
+            clockForm.CloseButtonVisible = false;
+            InvalidateClockBackdrop();
+        }
     }
 
     private void OnPopupMouseDown(object? sender, MouseEventArgs e)
     {
-        if (e.Button != MouseButtons.Left || e.Clicks != 2)
+        if (e.Button != MouseButtons.Left)
         {
             return;
         }
 
         var clickPoint = clockForm.PointToClient(Cursor.Position);
-        if (closeLabel.Bounds.Contains(clickPoint))
+        if (clockForm.IsCloseButtonHit(clickPoint))
+        {
+            HideClock();
+            return;
+        }
+
+        if (e.Clicks != 2)
         {
             return;
         }
@@ -445,6 +469,82 @@ sealed class TrayContext : ApplicationContext
     private void OnPopupMouseMove(object? sender, MouseEventArgs e)
     {
         var cursorPosition = clockForm.PointToClient(Cursor.Position);
-        closeLabel.Visible = ClockLayout.ShouldShowCloseButton(cursorPosition, clockForm.ClientRectangle);
+        bool shouldShow = ClockLayout.ShouldShowCloseButton(cursorPosition, clockForm.ClientRectangle);
+        if (clockForm.CloseButtonVisible != shouldShow)
+        {
+            clockForm.CloseButtonVisible = shouldShow;
+            InvalidateClockBackdrop();
+        }
+    }
+
+    private void OnClockFormActivationChanged(object? sender, EventArgs e)
+    {
+        bool nextIsActive = clockForm.IsHandleCreated
+            && NativeMethods.GetForegroundWindow() == clockForm.Handle;
+        if (nextIsActive == isClockActive)
+        {
+            return;
+        }
+
+        isClockActive = nextIsActive;
+        UpdateWindowAppearance(forceFrameRefresh: false);
+    }
+
+    private void InvalidateClockBackdrop()
+    {
+        if (!clockForm.Visible)
+        {
+            return;
+        }
+
+        if (clockForm.IsHandleCreated)
+        {
+            if (isSystemBackdropEnabled)
+            {
+                NativeMethods.RefreshWindow(clockForm.Handle, includeFrame: false);
+            }
+            else
+            {
+                clockForm.Invalidate();
+                clockForm.Update();
+            }
+        }
+    }
+
+    private void UpdateWindowAppearance(bool forceFrameRefresh)
+    {
+        if (clockForm.IsHandleCreated)
+        {
+            isSystemBackdropEnabled = ApplyWindowChrome();
+        }
+        else
+        {
+            isSystemBackdropEnabled = appearance.IsTransparencyEffectsEnabled && isClockActive;
+        }
+
+        ApplyPopupColors(isSystemBackdropEnabled);
+
+        if (!clockForm.IsHandleCreated || !clockForm.Visible)
+        {
+            return;
+        }
+
+        // Toggling the backdrop at runtime does not need a non-client frame refresh.
+        // Asking Windows to restage the frame during focus transitions is what exposes
+        // the temporary border/caption flash the user sees.
+        if (forceFrameRefresh)
+        {
+            _ = NativeMethods.TryNotifyFrameChanged(clockForm.Handle);
+        }
+
+        if (isSystemBackdropEnabled)
+        {
+            NativeMethods.RefreshWindow(clockForm.Handle, includeFrame: forceFrameRefresh);
+        }
+        else
+        {
+            clockForm.Invalidate();
+            clockForm.Update();
+        }
     }
 }
