@@ -21,6 +21,7 @@ sealed class TrayContext : ApplicationContext
 
     private AppearanceSettings appearance;
     private TransparencyMode transparencyMode;
+    private bool isAlwaysOnTop;
     private Point? lastLocation;
     private bool firstTick;
     private bool disposed;
@@ -37,6 +38,7 @@ sealed class TrayContext : ApplicationContext
         appearanceMonitor = new AppearanceSettingsMonitor();
         appearance = appearanceMonitor.Current;
         transparencyMode = TransparencyModeStore.ReadCurrent();
+        isAlwaysOnTop = AlwaysOnTopPreferenceStore.ReadCurrent();
         appearanceMonitor.Changed += OnAppearanceChanged;
 
         timeLabelFont = CreateTimeLabelFont(24f);
@@ -119,7 +121,7 @@ sealed class TrayContext : ApplicationContext
         {
             ShowInTaskbar = false,
             StartPosition = FormStartPosition.Manual,
-            TopMost = true,
+            TopMost = isAlwaysOnTop,
             ClientSize = new Size(200, 80),
             MinimumSize = new Size(120, 48),
             DisplayFont = timeLabelFont
@@ -158,6 +160,10 @@ sealed class TrayContext : ApplicationContext
         maximizeItem.Click += (s, e) => ToggleWindowState();
         contextMenu.Items.Add(maximizeItem);
 
+        var alwaysOnTopItem = new ToolStripMenuItem("Always on top");
+        alwaysOnTopItem.Click += (s, e) => SetAlwaysOnTop(!isAlwaysOnTop);
+        contextMenu.Items.Add(alwaysOnTopItem);
+
         var transparencyOffItem = new ToolStripMenuItem("Transparency: Off");
         transparencyOffItem.Click += (s, e) => SetTransparencyMode(TransparencyMode.Off);
         contextMenu.Items.Add(transparencyOffItem);
@@ -182,6 +188,7 @@ sealed class TrayContext : ApplicationContext
             maximizeItem.Text = clockForm.WindowState == FormWindowState.Normal
                 ? "Maximize"
                 : "Unmaximize";
+            alwaysOnTopItem.Checked = isAlwaysOnTop;
             transparencyOffItem.Checked = transparencyMode == TransparencyMode.Off;
             transparencyOnItem.Checked = transparencyMode == TransparencyMode.AlwaysOn;
             transparencyOnlyActiveItem.Checked = transparencyMode == TransparencyMode.OnlyActive;
@@ -677,5 +684,22 @@ sealed class TrayContext : ApplicationContext
         TransparencyModeStore.WriteCurrent(nextMode);
         CancelBackdropFadeOut();
         UpdateWindowAppearance(forceFrameRefresh: false);
+    }
+
+    private void SetAlwaysOnTop(bool nextValue)
+    {
+        if (isAlwaysOnTop == nextValue)
+        {
+            return;
+        }
+
+        isAlwaysOnTop = nextValue;
+        AlwaysOnTopPreferenceStore.WriteCurrent(nextValue);
+        clockForm.TopMost = nextValue;
+        if (nextValue && clockForm.Visible)
+        {
+            clockForm.BringToFront();
+            _ = NativeMethods.SetForegroundWindow(clockForm.Handle);
+        }
     }
 }

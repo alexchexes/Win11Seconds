@@ -47,6 +47,43 @@ static class TransparencyModeStore
     }
 }
 
+static class AlwaysOnTopPreferenceStore
+{
+    private const string SettingsRegistryKey = @"HKEY_CURRENT_USER\Software\Win11Seconds";
+    private const string AlwaysOnTopValueName = "AlwaysOnTop";
+
+    internal const bool DefaultValue = true;
+
+    public static bool ReadCurrent()
+    {
+        int value = (int?)Registry.GetValue(
+            SettingsRegistryKey,
+            AlwaysOnTopValueName,
+            DefaultValue ? 1 : 0) ?? (DefaultValue ? 1 : 0);
+
+        return Normalize(value);
+    }
+
+    public static void WriteCurrent(bool value)
+    {
+        Registry.SetValue(
+            SettingsRegistryKey,
+            AlwaysOnTopValueName,
+            value ? 1 : 0,
+            RegistryValueKind.DWord);
+    }
+
+    internal static bool Normalize(int value)
+    {
+        return value switch
+        {
+            0 => false,
+            1 => true,
+            _ => DefaultValue
+        };
+    }
+}
+
 static class TransparencyModePolicy
 {
     public static bool ShouldEnableSystemBackdrop(

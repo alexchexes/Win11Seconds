@@ -79,4 +79,17 @@ public class TransparencyModeTests
                 Is.False);
         });
     }
+
+    [Test]
+    public void AlwaysOnTopNormalize_ReturnsExpectedValues()
+    {
+        Assert.Multiple(() =>
+        {
+            Assert.That(AlwaysOnTopPreferenceStore.Normalize(0), Is.False);
+            Assert.That(AlwaysOnTopPreferenceStore.Normalize(1), Is.True);
+            Assert.That(
+                AlwaysOnTopPreferenceStore.Normalize(999),
+                Is.EqualTo(AlwaysOnTopPreferenceStore.DefaultValue));
+        });
+    }
 }

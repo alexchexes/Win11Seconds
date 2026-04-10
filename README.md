@@ -39,7 +39,7 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 - Supports Windows transparency effects on supported Windows 11 builds
 - Resizable, drag-to-move, double-click to maximize/unmaximize (looks like a full-screen clock, supports any aspect ratio display, even vertical)
 - Remembers last position/size
-- Popup is "always-on-top" when activated
+- Optional always-on-top toggle in the context menu
 
 ## Usage
 
@@ -61,7 +61,7 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 
 - **Left-click tray icon**: Show/hide popup clock (with seconds)
 - **Double-click popup clock**: Maximize/Unmaximize
-- **Right-click tray icon or popup clock**: Show context menu
+- **Right-click tray icon or popup clock**: Show context menu, including always-on-top and transparency options
 - **Hover over the top right corner of the popup clock**: Show "Close" button
 
 ## Troubleshooting
