@@ -36,6 +36,7 @@ Hence, this simple utility brings back the ability to “click in tray and see s
 - Minimal CPU & memory footprint: uses **8 MB of RAM** and nearly zero CPU while in the background
 - Click the tray icon and see the `HH:mm:ss` ticking in real time
 - Dark/light theme auto-detect
+- Supports Windows transparency effects on supported Windows 11 builds
 - Resizable, drag-to-move, double-click to maximize/unmaximize (looks like a full-screen clock, supports any aspect ratio display, even vertical)
 - Remembers last position/size
 - Popup is "always-on-top" when activated
