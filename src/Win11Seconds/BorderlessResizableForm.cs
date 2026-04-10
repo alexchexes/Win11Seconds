@@ -34,6 +34,9 @@ sealed class BorderlessResizableForm : Form
     public Color DisplayForeColor { get; set; } = Color.White;
     public bool CloseButtonVisible { get; set; }
     public Color CloseButtonForeColor { get; set; } = Color.White;
+    public bool IsWindowActive { get; private set; }
+
+    public event Action<bool>? WindowActivationChanged;
 
     public BorderlessResizableForm()
     {
@@ -77,6 +80,13 @@ sealed class BorderlessResizableForm : Form
 
         if (m.Msg == WM_NCACTIVATE)
         {
+            bool nextIsActive = m.WParam != IntPtr.Zero;
+            if (nextIsActive != IsWindowActive)
+            {
+                IsWindowActive = nextIsActive;
+                WindowActivationChanged?.Invoke(nextIsActive);
+            }
+
             // Let the default proc update activation state, but suppress the
             // native non-client repaint that would briefly show a standard frame.
             var activationMessage = Message.Create(m.HWnd, m.Msg, m.WParam, new IntPtr(-1));
@@ -147,7 +157,8 @@ sealed class BorderlessResizableForm : Form
             return;
         }
 
-        base.OnPaintBackground(e);
+        using SolidBrush backgroundBrush = new(BackColor);
+        e.Graphics.FillRectangle(backgroundBrush, ClientRectangle);
     }
 
     protected override void OnPaint(PaintEventArgs e)

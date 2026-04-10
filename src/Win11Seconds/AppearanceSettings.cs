@@ -6,18 +6,26 @@ readonly record struct AppearanceSettings(
     bool IsLightTheme,
     bool IsTransparencyEffectsEnabled)
 {
+    private static readonly Color LightPopupBackground = Color.White;
+    private static readonly Color DarkPopupBackground = Color.FromArgb(32, 32, 32);
+    private static readonly Color LightPopupActiveBackdropOverlay = Color.FromArgb(72, 255, 255, 255);
+    private static readonly Color DarkPopupActiveBackdropOverlay = Color.FromArgb(117, 0, 0, 0);
+
     public bool UseImmersiveDarkMode => !IsLightTheme;
 
     public Color PopupSolidBackgroundColor =>
-        IsLightTheme ? Color.White : Color.FromArgb(32, 32, 32);
+        IsLightTheme ? LightPopupBackground : DarkPopupBackground;
 
     public Color PopupInactiveBackgroundColor =>
-        IsLightTheme ? Color.White : Color.FromArgb(32, 32, 32);
+        IsLightTheme ? LightPopupBackground : DarkPopupBackground;
+
+    public Color PopupInactiveBackdropOverlayColor =>
+        Color.FromArgb(255, PopupInactiveBackgroundColor);
 
     public Color PopupActiveBackdropOverlayColor =>
         IsLightTheme
-            ? Color.FromArgb(72, 255, 255, 255)
-            : Color.FromArgb(117, 0, 0, 0);
+            ? LightPopupActiveBackdropOverlay
+            : DarkPopupActiveBackdropOverlay;
 
     public Color PopupForegroundColor =>
         IsLightTheme ? Color.Black : Color.White;

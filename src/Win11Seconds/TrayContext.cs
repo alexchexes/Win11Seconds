@@ -6,6 +6,9 @@ namespace Win11Seconds;
 
 sealed class TrayContext : ApplicationContext
 {
+    private const int BackdropFadeOutIntervalMilliseconds = 20;
+    private const int BackdropFadeOutSteps = 6;
+
     private readonly SynchronizationContext uiContext;
     private readonly AppearanceSettingsMonitor appearanceMonitor;
     private readonly NotifyIcon tray;
@@ -13,6 +16,7 @@ sealed class TrayContext : ApplicationContext
     private Font timeLabelFont;
     private readonly System.Windows.Forms.Timer timer;
     private readonly System.Windows.Forms.Timer closeHideTimer;
+    private readonly System.Windows.Forms.Timer backdropFadeOutTimer;
     private readonly ContextMenuStrip menu;
 
     private AppearanceSettings appearance;
@@ -21,6 +25,8 @@ sealed class TrayContext : ApplicationContext
     private bool disposed;
     private bool isClockActive;
     private bool isSystemBackdropEnabled;
+    private bool isBackdropFadeOutInProgress;
+    private int backdropFadeOutStep;
     private float lastAppliedFontSize = 24f;
 
     public TrayContext()
@@ -42,6 +48,9 @@ sealed class TrayContext : ApplicationContext
 
         closeHideTimer = new System.Windows.Forms.Timer { Interval = 100 };
         closeHideTimer.Tick += CloseHideTimer_Tick;
+
+        backdropFadeOutTimer = new System.Windows.Forms.Timer { Interval = BackdropFadeOutIntervalMilliseconds };
+        backdropFadeOutTimer.Tick += BackdropFadeOutTimer_Tick;
 
         menu = CreateContextMenu();
         tray.ContextMenuStrip = menu;
@@ -65,6 +74,7 @@ sealed class TrayContext : ApplicationContext
 
             timer.Dispose();
             closeHideTimer.Dispose();
+            backdropFadeOutTimer.Dispose();
 
             tray.ContextMenuStrip = null;
             clockForm.ContextMenuStrip = null;
@@ -127,8 +137,7 @@ sealed class TrayContext : ApplicationContext
         clockForm.Resize += OnClockFormResize;
         clockForm.FormClosing += OnClockFormClosing;
         clockForm.Move += OnClockFormMove;
-        clockForm.Activated += OnClockFormActivationChanged;
-        clockForm.Deactivate += OnClockFormActivationChanged;
+        clockForm.WindowActivationChanged += OnClockFormActivationChanged;
         clockForm.MouseDown += DragWindow;
         clockForm.MouseDown += OnPopupMouseDown;
         clockForm.MouseMove += OnPopupMouseMove;
@@ -198,7 +207,8 @@ sealed class TrayContext : ApplicationContext
 
     private bool ApplyWindowChrome()
     {
-        bool shouldEnableBackdrop = appearance.IsTransparencyEffectsEnabled && isClockActive;
+        bool shouldEnableBackdrop = appearance.IsTransparencyEffectsEnabled
+            && (isClockActive || isBackdropFadeOutInProgress);
         NativeMethods.TrySetRoundedCorners(clockForm.Handle);
         NativeMethods.TrySetImmersiveDarkMode(clockForm.Handle, appearance.UseImmersiveDarkMode);
         NativeMethods.TryHideBorder(clockForm.Handle);
@@ -233,7 +243,7 @@ sealed class TrayContext : ApplicationContext
     {
         clockForm.BackColor = GetPopupWindowBackgroundColor(useSystemBackdrop);
         clockForm.BackdropOverlayColor = useSystemBackdrop
-            ? appearance.PopupActiveBackdropOverlayColor
+            ? GetPopupBackdropOverlayColor()
             : Color.Empty;
         clockForm.DisplayForeColor = appearance.PopupForegroundColor;
         clockForm.CloseButtonForeColor = appearance.PopupForegroundColor;
@@ -249,6 +259,34 @@ sealed class TrayContext : ApplicationContext
         return appearance.IsTransparencyEffectsEnabled && !isClockActive
             ? appearance.PopupInactiveBackgroundColor
             : appearance.PopupSolidBackgroundColor;
+    }
+
+    private Color GetPopupBackdropOverlayColor()
+    {
+        if (!isBackdropFadeOutInProgress)
+        {
+            return appearance.PopupActiveBackdropOverlayColor;
+        }
+
+        float progress = Math.Clamp(backdropFadeOutStep / (float)BackdropFadeOutSteps, 0f, 1f);
+        return InterpolateColor(
+            appearance.PopupActiveBackdropOverlayColor,
+            appearance.PopupInactiveBackdropOverlayColor,
+            progress);
+    }
+
+    private static Color InterpolateColor(Color start, Color end, float progress)
+    {
+        static byte Lerp(byte from, byte to, float amount)
+        {
+            return (byte)Math.Clamp((int)Math.Round(from + ((to - from) * amount)), 0, 255);
+        }
+
+        return Color.FromArgb(
+            Lerp(start.A, end.A, progress),
+            Lerp(start.R, end.R, progress),
+            Lerp(start.G, end.G, progress),
+            Lerp(start.B, end.B, progress));
     }
 
     private void StartSynchronizedTimer()
@@ -284,6 +322,7 @@ sealed class TrayContext : ApplicationContext
 
     private void ShowClock()
     {
+        CancelBackdropFadeOut();
         clockForm.DisplayText = DateTime.Now.ToString("HH:mm:ss", CultureInfo.InvariantCulture);
         clockForm.CloseButtonVisible = false;
 
@@ -319,6 +358,7 @@ sealed class TrayContext : ApplicationContext
 
     private void HideClock()
     {
+        CancelBackdropFadeOut();
         timer.Stop();
         closeHideTimer.Stop();
         clockForm.CloseButtonVisible = false;
@@ -400,6 +440,27 @@ sealed class TrayContext : ApplicationContext
         }
     }
 
+    private void BackdropFadeOutTimer_Tick(object? sender, EventArgs e)
+    {
+        if (!isBackdropFadeOutInProgress)
+        {
+            backdropFadeOutTimer.Stop();
+            return;
+        }
+
+        backdropFadeOutStep = Math.Min(backdropFadeOutStep + 1, BackdropFadeOutSteps);
+        UpdateWindowAppearance(forceFrameRefresh: false);
+
+        if (backdropFadeOutStep < BackdropFadeOutSteps)
+        {
+            return;
+        }
+
+        backdropFadeOutTimer.Stop();
+        isBackdropFadeOutInProgress = false;
+        UpdateWindowAppearance(forceFrameRefresh: false);
+    }
+
     private void OnTrayMouseUp(object? sender, MouseEventArgs e)
     {
         if (e.Button == MouseButtons.Left)
@@ -477,16 +538,27 @@ sealed class TrayContext : ApplicationContext
         }
     }
 
-    private void OnClockFormActivationChanged(object? sender, EventArgs e)
+    private void OnClockFormActivationChanged(bool nextIsActive)
     {
-        bool nextIsActive = clockForm.IsHandleCreated
-            && NativeMethods.GetForegroundWindow() == clockForm.Handle;
         if (nextIsActive == isClockActive)
         {
             return;
         }
 
+        if (nextIsActive)
+        {
+            CancelBackdropFadeOut();
+        }
+
         isClockActive = nextIsActive;
+
+        if (!nextIsActive && appearance.IsTransparencyEffectsEnabled)
+        {
+            isBackdropFadeOutInProgress = true;
+            backdropFadeOutStep = 0;
+            backdropFadeOutTimer.Start();
+        }
+
         UpdateWindowAppearance(forceFrameRefresh: false);
     }
 
@@ -519,7 +591,8 @@ sealed class TrayContext : ApplicationContext
         }
         else
         {
-            isSystemBackdropEnabled = appearance.IsTransparencyEffectsEnabled && isClockActive;
+            isSystemBackdropEnabled = appearance.IsTransparencyEffectsEnabled
+                && (isClockActive || isBackdropFadeOutInProgress);
         }
 
         ApplyPopupColors(isSystemBackdropEnabled);
@@ -546,5 +619,12 @@ sealed class TrayContext : ApplicationContext
             clockForm.Invalidate();
             clockForm.Update();
         }
+    }
+
+    private void CancelBackdropFadeOut()
+    {
+        backdropFadeOutTimer.Stop();
+        isBackdropFadeOutInProgress = false;
+        backdropFadeOutStep = 0;
     }
 }
