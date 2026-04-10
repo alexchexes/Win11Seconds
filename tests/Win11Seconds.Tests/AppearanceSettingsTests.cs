@@ -10,10 +10,10 @@ public class AppearanceSettingsTests
         Assert.Multiple(() =>
         {
             Assert.That(settings.UseImmersiveDarkMode, Is.False);
-            Assert.That(settings.PopupSolidBackgroundColor, Is.EqualTo(Color.White));
-            Assert.That(settings.PopupInactiveBackgroundColor, Is.EqualTo(Color.White));
-            Assert.That(settings.PopupInactiveBackdropOverlayColor, Is.EqualTo(Color.FromArgb(255, 255, 255, 255)));
-            Assert.That(settings.PopupActiveBackdropOverlayColor, Is.EqualTo(Color.FromArgb(72, 255, 255, 255)));
+            Assert.That(settings.PopupSolidBackgroundColor, Is.EqualTo(Color.FromArgb(238, 238, 238)));
+            Assert.That(settings.PopupInactiveBackgroundColor, Is.EqualTo(Color.FromArgb(238, 238, 238)));
+            Assert.That(settings.PopupInactiveBackdropOverlayColor, Is.EqualTo(Color.FromArgb(255, 238, 238, 238)));
+            Assert.That(settings.PopupActiveBackdropOverlayColor, Is.EqualTo(Color.FromArgb(160, 255, 255, 255)));
             Assert.That(settings.PopupForegroundColor, Is.EqualTo(Color.Black));
             Assert.That(settings.TrayIconResourceName, Is.EqualTo("Win11Seconds.tray_dark.ico"));
             Assert.That(settings.IsTransparencyEffectsEnabled, Is.True);

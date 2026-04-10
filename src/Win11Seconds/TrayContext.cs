@@ -20,6 +20,7 @@ sealed class TrayContext : ApplicationContext
     private readonly ContextMenuStrip menu;
 
     private AppearanceSettings appearance;
+    private TransparencyMode transparencyMode;
     private Point? lastLocation;
     private bool firstTick;
     private bool disposed;
@@ -35,6 +36,7 @@ sealed class TrayContext : ApplicationContext
 
         appearanceMonitor = new AppearanceSettingsMonitor();
         appearance = appearanceMonitor.Current;
+        transparencyMode = TransparencyModeStore.ReadCurrent();
         appearanceMonitor.Changed += OnAppearanceChanged;
 
         timeLabelFont = CreateTimeLabelFont(24f);
@@ -156,16 +158,36 @@ sealed class TrayContext : ApplicationContext
         maximizeItem.Click += (s, e) => ToggleWindowState();
         contextMenu.Items.Add(maximizeItem);
 
+        var transparencyOffItem = new ToolStripMenuItem("Transparency: Off");
+        transparencyOffItem.Click += (s, e) => SetTransparencyMode(TransparencyMode.Off);
+        contextMenu.Items.Add(transparencyOffItem);
+
+        var transparencyOnItem = new ToolStripMenuItem("Transparency: On");
+        transparencyOnItem.Click += (s, e) => SetTransparencyMode(TransparencyMode.AlwaysOn);
+        contextMenu.Items.Add(transparencyOnItem);
+
+        var transparencyOnlyActiveItem = new ToolStripMenuItem("Transparency: Only While Active");
+        transparencyOnlyActiveItem.Click += (s, e) => SetTransparencyMode(TransparencyMode.OnlyActive);
+        contextMenu.Items.Add(transparencyOnlyActiveItem);
+
+        contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add("GitHub Repo", null, (s, e) => OpenRepositoryUrl());
         contextMenu.Items.Add(new ToolStripSeparator());
         contextMenu.Items.Add("Exit", null, (s, e) => ExitThread());
 
         contextMenu.Opening += (s, e) =>
         {
+            bool areTransparencyChoicesAvailable = appearance.IsTransparencyEffectsEnabled;
             showHideItem.Text = clockForm.Visible ? "Hide" : "Show";
             maximizeItem.Text = clockForm.WindowState == FormWindowState.Normal
                 ? "Maximize"
                 : "Unmaximize";
+            transparencyOffItem.Checked = transparencyMode == TransparencyMode.Off;
+            transparencyOnItem.Checked = transparencyMode == TransparencyMode.AlwaysOn;
+            transparencyOnlyActiveItem.Checked = transparencyMode == TransparencyMode.OnlyActive;
+            transparencyOffItem.Enabled = areTransparencyChoicesAvailable;
+            transparencyOnItem.Enabled = areTransparencyChoicesAvailable;
+            transparencyOnlyActiveItem.Enabled = areTransparencyChoicesAvailable;
         };
 
         return contextMenu;
@@ -207,8 +229,11 @@ sealed class TrayContext : ApplicationContext
 
     private bool ApplyWindowChrome()
     {
-        bool shouldEnableBackdrop = appearance.IsTransparencyEffectsEnabled
-            && (isClockActive || isBackdropFadeOutInProgress);
+        bool shouldEnableBackdrop = TransparencyModePolicy.ShouldEnableSystemBackdrop(
+            transparencyMode,
+            appearance.IsTransparencyEffectsEnabled,
+            isClockActive,
+            isBackdropFadeOutInProgress);
         NativeMethods.TrySetRoundedCorners(clockForm.Handle);
         NativeMethods.TrySetImmersiveDarkMode(clockForm.Handle, appearance.UseImmersiveDarkMode);
         NativeMethods.TryHideBorder(clockForm.Handle);
@@ -227,6 +252,8 @@ sealed class TrayContext : ApplicationContext
 
         NativeMethods.TryExtendFrameIntoClientArea(clockForm.Handle, useSystemBackdrop);
         clockForm.UseSystemBackdropBackground = useSystemBackdrop;
+        clockForm.PreserveActiveNcAppearance =
+            useSystemBackdrop && transparencyMode == TransparencyMode.AlwaysOn;
         if (useSystemBackdrop)
         {
             NativeMethods.TryResetCaptionColor(clockForm.Handle);
@@ -256,23 +283,28 @@ sealed class TrayContext : ApplicationContext
             return appearance.PopupSolidBackgroundColor;
         }
 
-        return appearance.IsTransparencyEffectsEnabled && !isClockActive
+        return transparencyMode == TransparencyMode.OnlyActive
+            && appearance.IsTransparencyEffectsEnabled
+            && !isClockActive
             ? appearance.PopupInactiveBackgroundColor
             : appearance.PopupSolidBackgroundColor;
     }
 
     private Color GetPopupBackdropOverlayColor()
     {
-        if (!isBackdropFadeOutInProgress)
+        if (isBackdropFadeOutInProgress)
         {
-            return appearance.PopupActiveBackdropOverlayColor;
+            float progress = Math.Clamp(backdropFadeOutStep / (float)BackdropFadeOutSteps, 0f, 1f);
+            return InterpolateColor(
+                appearance.PopupActiveBackdropOverlayColor,
+                appearance.PopupInactiveBackdropOverlayColor,
+                progress);
         }
 
-        float progress = Math.Clamp(backdropFadeOutStep / (float)BackdropFadeOutSteps, 0f, 1f);
-        return InterpolateColor(
-            appearance.PopupActiveBackdropOverlayColor,
-            appearance.PopupInactiveBackdropOverlayColor,
-            progress);
+        // "Transparency: On" means keep the live transparent surface in both
+        // active and inactive states. The opaque inactive overlay is only for
+        // the fade-out path used by "Only While Active".
+        return appearance.PopupActiveBackdropOverlayColor;
     }
 
     private static Color InterpolateColor(Color start, Color end, float progress)
@@ -552,7 +584,10 @@ sealed class TrayContext : ApplicationContext
 
         isClockActive = nextIsActive;
 
-        if (!nextIsActive && appearance.IsTransparencyEffectsEnabled)
+        if (!nextIsActive
+            && TransparencyModePolicy.ShouldFadeOutOnDeactivation(
+                transparencyMode,
+                appearance.IsTransparencyEffectsEnabled))
         {
             isBackdropFadeOutInProgress = true;
             backdropFadeOutStep = 0;
@@ -591,8 +626,11 @@ sealed class TrayContext : ApplicationContext
         }
         else
         {
-            isSystemBackdropEnabled = appearance.IsTransparencyEffectsEnabled
-                && (isClockActive || isBackdropFadeOutInProgress);
+            isSystemBackdropEnabled = TransparencyModePolicy.ShouldEnableSystemBackdrop(
+                transparencyMode,
+                appearance.IsTransparencyEffectsEnabled,
+                isClockActive,
+                isBackdropFadeOutInProgress);
         }
 
         ApplyPopupColors(isSystemBackdropEnabled);
@@ -626,5 +664,18 @@ sealed class TrayContext : ApplicationContext
         backdropFadeOutTimer.Stop();
         isBackdropFadeOutInProgress = false;
         backdropFadeOutStep = 0;
+    }
+
+    private void SetTransparencyMode(TransparencyMode nextMode)
+    {
+        if (transparencyMode == nextMode)
+        {
+            return;
+        }
+
+        transparencyMode = nextMode;
+        TransparencyModeStore.WriteCurrent(nextMode);
+        CancelBackdropFadeOut();
+        UpdateWindowAppearance(forceFrameRefresh: false);
     }
 }

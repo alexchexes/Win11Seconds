@@ -34,6 +34,7 @@ sealed class BorderlessResizableForm : Form
     public Color DisplayForeColor { get; set; } = Color.White;
     public bool CloseButtonVisible { get; set; }
     public Color CloseButtonForeColor { get; set; } = Color.White;
+    public bool PreserveActiveNcAppearance { get; set; }
     public bool IsWindowActive { get; private set; }
 
     public event Action<bool>? WindowActivationChanged;
@@ -89,7 +90,10 @@ sealed class BorderlessResizableForm : Form
 
             // Let the default proc update activation state, but suppress the
             // native non-client repaint that would briefly show a standard frame.
-            var activationMessage = Message.Create(m.HWnd, m.Msg, m.WParam, new IntPtr(-1));
+            IntPtr activationWParam = !nextIsActive && PreserveActiveNcAppearance
+                ? (IntPtr)1
+                : m.WParam;
+            var activationMessage = Message.Create(m.HWnd, m.Msg, activationWParam, new IntPtr(-1));
             DefWndProc(ref activationMessage);
             m.Result = activationMessage.Result;
             return;
