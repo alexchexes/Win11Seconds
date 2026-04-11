@@ -37,4 +37,20 @@ public class BorderlessResizableFormTests
         form.CloseButtonVisible = false;
         Assert.That(form.IsCloseButtonHit(new Point(190, 10)), Is.False);
     }
+
+    [Test]
+    public void ProcessCmdKey_RaisesEscapePressed_ForEscapeKey()
+    {
+        using var form = new BorderlessResizableForm();
+        bool wasRaised = false;
+        form.EscapePressed += (sender, args) => wasRaised = true;
+
+        bool handled = form.TryHandleCommandKey(Keys.Escape);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(handled, Is.True);
+            Assert.That(wasRaised, Is.True);
+        });
+    }
 }

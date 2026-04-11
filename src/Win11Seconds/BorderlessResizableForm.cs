@@ -38,6 +38,7 @@ sealed class BorderlessResizableForm : Form
     public bool IsWindowActive { get; private set; }
 
     public event Action<bool>? WindowActivationChanged;
+    public event EventHandler? EscapePressed;
 
     public BorderlessResizableForm()
     {
@@ -69,6 +70,27 @@ sealed class BorderlessResizableForm : Form
     public bool IsCloseButtonHit(Point cursorPosition)
     {
         return CloseButtonVisible && GetCloseButtonBounds().Contains(cursorPosition);
+    }
+
+    protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+    {
+        if (TryHandleCommandKey(keyData))
+        {
+            return true;
+        }
+
+        return base.ProcessCmdKey(ref msg, keyData);
+    }
+
+    internal bool TryHandleCommandKey(Keys keyData)
+    {
+        if (keyData != Keys.Escape)
+        {
+            return false;
+        }
+
+        EscapePressed?.Invoke(this, EventArgs.Empty);
+        return true;
     }
 
     protected override void WndProc(ref Message m)

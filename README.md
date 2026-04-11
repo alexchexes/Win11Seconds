@@ -61,6 +61,8 @@ Optionally, to make the program auto-start with Windows, add a shortcut to the f
 
 - **Left-click tray icon**: Show/hide popup clock (with seconds)
 - **Double-click popup clock**: Maximize/Unmaximize
+- **Esc when popup is fullscreen**: Exit fullscreen
+- **Esc when popup is not fullscreen**: Hide it back to tray
 - **Right-click tray icon or popup clock**: Show context menu, including always-on-top and transparency options
 - **Hover over the top right corner of the popup clock**: Show "Close" button
 

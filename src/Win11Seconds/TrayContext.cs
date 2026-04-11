@@ -142,6 +142,7 @@ sealed class TrayContext : ApplicationContext
         clockForm.FormClosing += OnClockFormClosing;
         clockForm.Move += OnClockFormMove;
         clockForm.WindowActivationChanged += OnClockFormActivationChanged;
+        clockForm.EscapePressed += OnClockFormEscapePressed;
         clockForm.MouseDown += DragWindow;
         clockForm.MouseDown += OnPopupMouseDown;
         clockForm.MouseMove += OnPopupMouseMove;
@@ -541,6 +542,22 @@ sealed class TrayContext : ApplicationContext
             clockForm.CloseButtonVisible = false;
             InvalidateClockBackdrop();
         }
+    }
+
+    private void OnClockFormEscapePressed(object? sender, EventArgs e)
+    {
+        if (!clockForm.Visible)
+        {
+            return;
+        }
+
+        if (clockForm.WindowState == FormWindowState.Maximized)
+        {
+            clockForm.WindowState = FormWindowState.Normal;
+            return;
+        }
+
+        HideClock();
     }
 
     private void OnPopupMouseDown(object? sender, MouseEventArgs e)
