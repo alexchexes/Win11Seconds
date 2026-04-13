@@ -4,6 +4,7 @@ using Microsoft.Win32;
 
 readonly record struct AppearanceSettings(
     bool IsLightTheme,
+    bool IsWindowsLightTheme,
     bool IsTransparencyEffectsEnabled)
 {
     private static readonly Color LightPopupBackground = Color.FromArgb(238, 238, 238);
@@ -31,7 +32,7 @@ readonly record struct AppearanceSettings(
         IsLightTheme ? Color.Black : Color.White;
 
     public string TrayIconResourceName =>
-        IsLightTheme ? "Win11Seconds.tray_dark.ico" : "Win11Seconds.tray_light.ico";
+        IsWindowsLightTheme ? "Win11Seconds.tray_dark.ico" : "Win11Seconds.tray_light.ico";
 }
 
 static class AppearanceSettingsReader
@@ -43,6 +44,7 @@ static class AppearanceSettingsReader
     {
         return new AppearanceSettings(
             ReadPersonalizeValue("AppsUseLightTheme", 1) != 0,
+            ReadPersonalizeValue("SystemUsesLightTheme", 1) != 0,
             ReadPersonalizeValue("EnableTransparency", 1) != 0);
     }
 

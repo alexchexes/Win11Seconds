@@ -3,9 +3,12 @@ namespace Win11Seconds.Tests;
 public class AppearanceSettingsTests
 {
     [Test]
-    public void LightTheme_UsesExpectedColorsAndDarkTrayIcon()
+    public void LightThemeWithLightWindowsMode_UsesExpectedColorsAndDarkTrayIcon()
     {
-        var settings = new AppearanceSettings(IsLightTheme: true, IsTransparencyEffectsEnabled: true);
+        var settings = new AppearanceSettings(
+            IsLightTheme: true,
+            IsWindowsLightTheme: true,
+            IsTransparencyEffectsEnabled: true);
 
         Assert.Multiple(() =>
         {
@@ -21,9 +24,12 @@ public class AppearanceSettingsTests
     }
 
     [Test]
-    public void DarkTheme_UsesExpectedColorsAndLightTrayIcon()
+    public void DarkThemeWithDarkWindowsMode_UsesExpectedColorsAndLightTrayIcon()
     {
-        var settings = new AppearanceSettings(IsLightTheme: false, IsTransparencyEffectsEnabled: false);
+        var settings = new AppearanceSettings(
+            IsLightTheme: false,
+            IsWindowsLightTheme: false,
+            IsTransparencyEffectsEnabled: false);
 
         Assert.Multiple(() =>
         {
@@ -35,6 +41,37 @@ public class AppearanceSettingsTests
             Assert.That(settings.PopupForegroundColor, Is.EqualTo(Color.White));
             Assert.That(settings.TrayIconResourceName, Is.EqualTo("Win11Seconds.tray_light.ico"));
             Assert.That(settings.IsTransparencyEffectsEnabled, Is.False);
+        });
+    }
+
+    [Test]
+    public void LightAppThemeWithDarkWindowsMode_UsesLightTrayIcon()
+    {
+        var settings = new AppearanceSettings(
+            IsLightTheme: true,
+            IsWindowsLightTheme: false,
+            IsTransparencyEffectsEnabled: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.PopupForegroundColor, Is.EqualTo(Color.Black));
+            Assert.That(settings.TrayIconResourceName, Is.EqualTo("Win11Seconds.tray_light.ico"));
+        });
+    }
+
+    [Test]
+    public void DarkWindowsModeWithLightAppThemeStillUsesAppLightColors()
+    {
+        var settings = new AppearanceSettings(
+            IsLightTheme: true,
+            IsWindowsLightTheme: false,
+            IsTransparencyEffectsEnabled: true);
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(settings.PopupSolidBackgroundColor, Is.EqualTo(Color.FromArgb(238, 238, 238)));
+            Assert.That(settings.PopupForegroundColor, Is.EqualTo(Color.Black));
+            Assert.That(settings.TrayIconResourceName, Is.EqualTo("Win11Seconds.tray_light.ico"));
         });
     }
 }
