@@ -2,6 +2,9 @@
 
 **Bring back the seconds to your Windows 11 tray — on click.**
 
+> **Note:**  
+> Microsoft finally realized their mistake, and in **Windows 11 25H2**, after almost 5 years of waiting, they finally restored seconds ticking when you click on the system clock. However, that is not the case for **Windows 11 LTSC**, which is currently **24H2** and will remain that way until at least the second half of 2027.
+
 * [Why](#why)
 * [Features](#features)
 * [Usage](#usage)
