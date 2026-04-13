@@ -7,7 +7,7 @@
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
     <RuntimeIdentifiers>win-x64;win-arm64</RuntimeIdentifiers>
-    <Version>0.9.2</Version>
+    <Version>0.9.3</Version>
     <AssemblyVersion>$(Version).0</AssemblyVersion>
     <FileVersion>$(Version).0</FileVersion>
 
